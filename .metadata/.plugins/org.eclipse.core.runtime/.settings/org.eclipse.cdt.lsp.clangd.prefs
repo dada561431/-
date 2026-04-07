@@ -1,0 +1,3 @@
+additional_options=--compile-commands-dir\=D\:/mtw/PSOC_Edge_Hachimitsu_Detector/proj_cm33_s/build
+clangd_path=C\:\\Users\\60280\\Infineon\\Tools\\ModusToolboxEclipse\\clangd\\bin\\clangd.exe
+eclipse.preferences.version=1

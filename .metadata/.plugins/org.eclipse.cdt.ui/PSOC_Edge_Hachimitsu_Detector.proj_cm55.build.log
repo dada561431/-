@@ -1,0 +1,8 @@
+12:19:34 **** Clean-only build of configuration Debug for project PSOC_Edge_Hachimitsu_Detector.proj_cm55 ****
+"C:\\Infineon\\Tools\\ModusToolbox\\tools_3.7\\modus-shell\\bin\\make" CY_MAKE_IDE=eclipse CY_IDE_TOOLS_DIR=C:/Infineon/Tools/ModusToolbox/tools_3.7 CY_IDE_BT_TOOLS_DIR= -j16 clean_proj 
+Searching installed tools in progress...
+Searching installed tools complete
+rm -rf D:/mtw/PSOC_Edge_Hachimitsu_Detector/proj_cm55/build
+
+12:19:35 Build Finished. 0 errors, 0 warnings. (took 919ms)
+

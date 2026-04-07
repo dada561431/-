@@ -1,0 +1,6 @@
+12:19:35 **** Clean-only build of configuration Debug for project mtb_shared ****
+echo Skipping mtb_shared; nothing to build for: clean 
+Skipping mtb_shared; nothing to build for: clean
+
+12:19:35 Build Finished. 0 errors, 0 warnings. (took 156ms)
+

@@ -1,0 +1,13 @@
+12:19:33 **** Clean-only build of configuration Debug for project PSOC_Edge_Hachimitsu_Detector.proj_cm33_s ****
+"C:\\Infineon\\Tools\\ModusToolbox\\tools_3.7\\modus-shell\\bin\\make" CY_MAKE_IDE=eclipse CY_IDE_TOOLS_DIR=C:/Infineon/Tools/ModusToolbox/tools_3.7 CY_IDE_BT_TOOLS_DIR= -j16 clean_proj 
+Searching installed tools in progress...
+Searching installed tools complete
+Use of the FPU on a secure project may be susceptible to an VLLDM Instruction Security Vulnerability (CVE-2021-35465). Verify the toolchain you are using already provides a workaround or use VFP_SELECT=softfloat instead of VFP_SELECT=. For more information see https://developer.arm.com/Arm%20Security%20Center/VLLDM%20Instruction%20Security%20Vulnerability
+
+NOTE: This secure project uses a non-secure callable veneer object file: ../proj_cm33_s/nsc_veneer.o.
+This file is not automatically cleaned by the 'make clean'. It is recommended that you save this file into version control.
+
+rm -rf D:/mtw/PSOC_Edge_Hachimitsu_Detector/proj_cm33_s/build
+
+12:19:34 Build Finished. 0 errors, 0 warnings. (took 768ms)
+

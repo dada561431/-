@@ -1,0 +1,26 @@
+12:19:31 **** Clean-only build of configuration Debug for project PSOC_Edge_Hachimitsu_Detector.proj_cm33_ns ****
+"C:\\Infineon\\Tools\\ModusToolbox\\tools_3.7\\modus-shell\\bin\\make" CY_MAKE_IDE=eclipse CY_IDE_TOOLS_DIR=C:/Infineon/Tools/ModusToolbox/tools_3.7 CY_IDE_BT_TOOLS_DIR= -j16 clean_proj 
+Searching installed tools in progress...
+Searching installed tools complete
+FW_FILE_PATH_NAME is: "../../mtb_shared/wifi-host-driver/release-v5.0.7/WHD/COMPONENT_WIFI6/resources/firmware/COMPONENT_55500/COMPONENT_SM/55500A1.trxcse"
+UNAME_S is: CYGWIN_NT-10.0-26200
+FW_FILE_SIZE is: 306688
+The wifi resource path is: ../../mtb_shared/wifi-resources/release-v3.0.0
+The MAC address is: 00:A0:50:76:ad:83
+NVRAM_FILE_PATH_NAME is: "../../mtb_shared/wifi-resources/release-v3.0.0/nvram/COMPONENT_WIFI6/COMPONENT_55500/COMPONENT_CYW55513_MOD_PSE84_SOM/cyw55513modpse84som_rev3.txt"
+CLM_FILE_PATH_NAME is: "../../mtb_shared/wifi-resources/release-v3.0.0/clm/COMPONENT_WIFI6/COMPONENT_55500/COMPONENT_CYW55513_MOD_PSE84_SOM/55500A1.clm_blob"
+FW_FILE_PATH_NAME is: "../../mtb_shared/wifi-host-driver/release-v5.0.7/WHD/COMPONENT_WIFI6/resources/firmware/COMPONENT_55500/COMPONENT_SM/55500A1.trxcse"
+UNAME_S is: CYGWIN_NT-10.0-26200
+FW_FILE_SIZE is: 306688
+The wifi resource path is: ../../mtb_shared/wifi-resources/release-v3.0.0
+The MAC address is: 00:A0:50:76:ad:83
+NVRAM_FILE_PATH_NAME is: "../../mtb_shared/wifi-resources/release-v3.0.0/nvram/COMPONENT_WIFI6/COMPONENT_55500/COMPONENT_CYW55513_MOD_PSE84_SOM/cyw55513modpse84som_rev3.txt"
+CLM_FILE_PATH_NAME is: "../../mtb_shared/wifi-resources/release-v3.0.0/clm/COMPONENT_WIFI6/COMPONENT_55500/COMPONENT_CYW55513_MOD_PSE84_SOM/55500A1.clm_blob"
+
+NOTE: This secure project uses a non-secure callable veneer object file: ../proj_cm33_s/nsc_veneer.o.
+This file is not automatically cleaned by the 'make clean'. It is recommended that you save this file into version control.
+
+rm -rf D:/mtw/PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/build
+
+12:19:33 Build Finished. 0 errors, 0 warnings. (took 2s.637ms)
+
