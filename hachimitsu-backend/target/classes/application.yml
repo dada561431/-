@@ -1,0 +1,37 @@
+﻿server:
+  port: 8080
+  tomcat:
+    use-relative-redirects: true
+  ssl:
+    enabled: true
+    key-store: classpath:server.pfx
+    key-store-type: PKCS12
+    key-store-password: 114514
+    key-alias: "1"
+
+spring:
+  application:
+    name: Hachimitsu
+  mongodb:
+    host: 127.0.0.1
+    port: 27017
+    database: hachimitsu
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+
+app:
+  upload-dir: D:/mtw/hachimitsu-backend/uploads
+
+logging:
+  level:
+    com:
+      zhijiangdiana:
+        hachimitsu:
+          service: info
+          controller: info
+
+baidu:
+  ak: Xma4dr8CzhMrpMOEqMPDDWeA8zVDGN9o
+  url: https://api.map.baidu.com/location/ip
