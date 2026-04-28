@@ -13,4 +13,11 @@ public interface MeowService {
     void saveMeowLog(AddMeowDto dto, String ip);
 
     boolean attachMeowImage(AttachMeowImageDto dto);
+
+    boolean attachRawYuyvImage(String equipmentId,
+                               Long timestamp,
+                               byte[] yuyvImage,
+                               int width,
+                               int height,
+                               Integer sourceStride);
 }

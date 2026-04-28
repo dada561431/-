@@ -5,12 +5,45 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d6d386fe-8ed2-4454-9b39-a3592e9f7ccb" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/.mtb-prefs.json" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/.mtb-prefs.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/camera_capture.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/camera_capture.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/camera_capture.h" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/camera_capture.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.h" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/service.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/service.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/service.h" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/service.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/usb_camera_host.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/usb_camera_host.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/usb_camera_host.h" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/usb_camera_host.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/controller/MeowController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/controller/MeowController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/ImageStorageService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/ImageStorageService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/MeowService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/MeowService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/impl/ImageStorageServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/impl/ImageStorageServiceImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/impl/MeowServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/service/impl/MeowServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/configuration/WebMvcConfiguration.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/configuration/WebMvcConfiguration.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/controller/MeowController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/controller/MeowController.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/handler/GlobalExceptionHandler.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/handler/GlobalExceptionHandler.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddMeowDto.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddMeowDto.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto$AddressDtoBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto$AddressDtoBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AttachMeowImageDto.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AttachMeowImageDto.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/LineChartVO.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/LineChartVO.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/Meow.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/Meow.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO$MeowLogsVOBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO$MeowLogsVOBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/NumberVO.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/NumberVO.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/PieChartCountVO.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/PieChartCountVO.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/ResponseResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/ResponseResult.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/AddressService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/AddressService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$1.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$2.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$2.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/ImageStorageService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/ImageStorageService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/MeowService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/MeowService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/ImageStorageServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/ImageStorageServiceImpl.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/MeowServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/MeowServiceImpl.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -18,7 +51,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="jar://$MAVEN_REPOSITORY$/org/springframework/spring-webmvc/7.0.1/spring-webmvc-7.0.1.jar!/org/springframework/web/servlet/DispatcherServlet.class" root0="SKIP_INSPECTION" />
@@ -50,10 +83,10 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;Spring Boot.HachimitsuApplication.executor&quot;: &quot;Run&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/mtw/hachimitsu-backend&quot;,
+    &quot;last_opened_file_path&quot;: &quot;E:/project/qianrushi/-/hachimitsu-backend&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -77,8 +110,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.28238.7" />
-        <option value="bundled-js-predefined-d6986cc7102b-a71380e98a7c-JavaScript-IU-252.28238.7" />
+        <option value="bundled-jdk-9823dce3aa75-fbdcb00ec9e3-intellij.indexing.shared.core-IU-251.26094.121" />
+        <option value="bundled-js-predefined-d6986cc7102b-b26f3e71634d-JavaScript-IU-251.26094.121" />
       </set>
     </attachedChunks>
   </component>
@@ -96,6 +129,9 @@
       <workItem from="1774934798506" duration="10976000" />
       <workItem from="1775528080909" duration="3575000" />
       <workItem from="1776132192656" duration="301000" />
+      <workItem from="1776135997753" duration="2612000" />
+      <workItem from="1777084287853" duration="8365000" />
+      <workItem from="1777182450685" duration="3765000" />
     </task>
     <servers />
   </component>

@@ -19,13 +19,17 @@
 #define USB_CAMERA_TASK_STACK_SIZE_BYTES   (8192U)
 #define USB_CAMERA_TASK_PRIORITY           (configMAX_PRIORITIES - 2)
 #define USB_CAMERA_USBH_ISR_PRIORITY       (configMAX_PRIORITIES - 1)
-#define USB_CAMERA_FRAME_INTERVAL_0P3MP    (2000000UL)
+#define USB_CAMERA_FRAME_INTERVAL_0P3MP    (333332UL)
 #define USB_CAMERA_FRAME_INTERVAL_LOGI     (1000000UL)
 #define USB_CAMERA_FORMAT                  USBH_VIDEO_VS_FORMAT_UNCOMPRESSED
 #define USB_CAMERA_REOPEN_RETRIES          (10U)
 #define USB_CAMERA_REOPEN_DELAY_MS         (300U)
 #define USB_CAMERA_MAX_STREAM_ERRORS       (10U)
 #define USB_CAMERA_STREAM_KEEPALIVE_MS     (45000U)
+#define USB_CAMERA_FRAME_TRACE_LOGS        (1U)
+#define USB_CAMERA_FRAME_TRACE_LIMIT       (12U)
+#define USB_CAMERA_ROW_BYTES               (USB_CAMERA_FRAME_WIDTH * 2U)
+#define USB_CAMERA_CAPTURE_FRAME_BYTES     (USB_CAMERA_FRAME_BYTES)
 
 #define USB_CAMERA_LOGITECH_VID            (0x046DU)
 #define USB_CAMERA_LOGITECH_C920_PID       (0x08E5U)
@@ -44,7 +48,9 @@ static cy_semaphore_t snapshot_ready_semaphore;
 static USBH_NOTIFICATION_HOOK camera_notification_hook;
 
 CY_SECTION(".cy_gpu_buf")
-static uint8_t frame_buffers[USB_CAMERA_NUM_FRAME_BUFFERS][USB_CAMERA_FRAME_BYTES];
+static uint8_t frame_buffers[USB_CAMERA_NUM_FRAME_BUFFERS][USB_CAMERA_CAPTURE_FRAME_BYTES];
+static size_t frame_lengths[USB_CAMERA_NUM_FRAME_BUFFERS];
+static uint16_t frame_source_strides[USB_CAMERA_NUM_FRAME_BUFFERS];
 static uint8_t latest_frame_index = 0U;
 static uint8_t capture_frame_index = 0U;
 static bool latest_frame_ready = false;
@@ -54,6 +60,12 @@ static bool usb_camera_connected = false;
 static bool usb_camera_supported = false;
 static volatile bool usb_camera_stream_active = false;
 static uint32_t usb_camera_stream_error_count = 0U;
+static uint32_t usb_camera_complete_frame_count = 0U;
+static uint32_t usb_camera_short_frame_count = 0U;
+static uint32_t usb_camera_overflow_frame_count = 0U;
+static size_t usb_camera_capture_bytes = 0U;
+static size_t usb_camera_capture_raw_bytes = 0U;
+static bool usb_camera_drop_frame = false;
 static volatile bool snapshot_request_pending = false;
 static volatile bool snapshot_capture_success = false;
 static volatile uint8_t usb_camera_device_index = 0xFFU;
@@ -82,15 +94,25 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
                                      uint32_t frame_interval,
                                      USBH_VIDEO_STREAM_CONFIG *stream_info,
                                      uint32_t *selected_interval);
+static unsigned usb_camera_get_frame_descriptor_count(const USBH_VIDEO_FORMAT_INFO *format_info);
 static uint32_t usb_camera_frame_interval_for_device(uint16_t vendor_id, uint16_t product_id);
 static bool usb_camera_open_device(U8 dev_index);
 static void usb_camera_close_device(void);
+static void usb_camera_reset_capture_state(void);
+static void usb_camera_signal_snapshot_ready(void);
+static void usb_camera_append_eof_frame_data(const U8 *p_data, size_t num_bytes, U32 flags);
+static void usb_camera_finish_eof_frame(U32 flags);
 static void usb_camera_build_bmp_from_latest(uint8_t *out_bmp,
                                              size_t out_bmp_size,
                                              size_t *out_bmp_len,
                                              uint16_t *out_width,
                                              uint16_t *out_height);
-static void yuyv_to_rgb_pixel(const uint8_t *frame, uint16_t x, uint16_t y,
+static bool usb_camera_publish_capture_frame(size_t frame_len);
+static size_t usb_camera_get_expected_frame_bytes(void);
+static void yuyv_to_rgb_pixel(const uint8_t *frame,
+                              uint32_t source_row_bytes,
+                              uint16_t x,
+                              uint16_t y,
                               uint8_t *r, uint8_t *g, uint8_t *b);
 static uint8_t clamp_u8(int32_t value);
 
@@ -104,6 +126,8 @@ cy_rslt_t usb_camera_host_init(void)
     }
 
     memset(frame_buffers, 0, sizeof(frame_buffers));
+    memset(frame_lengths, 0, sizeof(frame_lengths));
+    memset(frame_source_strides, 0, sizeof(frame_source_strides));
     latest_frame_ready = false;
     usb_camera_connected = false;
     usb_camera_supported = false;
@@ -112,6 +136,15 @@ cy_rslt_t usb_camera_host_init(void)
     memset(&usb_camera_device_handle, 0, sizeof(usb_camera_device_handle));
     memset(&usb_camera_interface_info, 0, sizeof(usb_camera_interface_info));
     usb_camera_device_opened = false;
+    usb_camera_complete_frame_count = 0U;
+    usb_camera_short_frame_count = 0U;
+    usb_camera_overflow_frame_count = 0U;
+    usb_camera_reset_capture_state();
+    printf("[CAMERA] Target stream %ux%u YUYV (%lu bytes/frame, %lu bytes buffers)\n",
+           (unsigned)USB_CAMERA_FRAME_WIDTH,
+           (unsigned)USB_CAMERA_FRAME_HEIGHT,
+           (unsigned long)USB_CAMERA_FRAME_BYTES,
+           (unsigned long)sizeof(frame_buffers));
 
     result = cy_rtos_mutex_init(&latest_frame_mutex, false);
     if (result != CY_RSLT_SUCCESS)
@@ -192,12 +225,6 @@ bool usb_camera_host_request_snapshot(uint32_t timeout_ms)
         usb_camera_stream_keepalive_deadline =
             xTaskGetTickCount() + pdMS_TO_TICKS(USB_CAMERA_STREAM_KEEPALIVE_MS);
 
-        if (latest_frame_ready)
-        {
-            cy_rtos_mutex_set(&snapshot_request_mutex);
-            return true;
-        }
-
         snapshot_capture_success = false;
         snapshot_request_pending = true;
         result = cy_rtos_semaphore_get(&snapshot_ready_semaphore, timeout_ms);
@@ -253,6 +280,128 @@ bool usb_camera_host_get_snapshot_bmp(uint8_t *out_bmp,
     return true;
 }
 
+bool usb_camera_host_get_latest_yuyv(uint8_t *out_frame,
+                                     size_t out_frame_size,
+                                     size_t *out_frame_len,
+                                     uint16_t *out_width,
+                                     uint16_t *out_height,
+                                     uint16_t *out_source_stride)
+{
+    size_t latest_frame_len;
+    uint16_t latest_source_stride;
+
+    if ((!usb_camera_host_initialized) ||
+        (!latest_frame_ready) ||
+        (out_frame == NULL))
+    {
+        if (out_frame_len != NULL)
+        {
+            *out_frame_len = 0U;
+        }
+        return false;
+    }
+
+    if (cy_rtos_mutex_get(&latest_frame_mutex, 1000U) != CY_RSLT_SUCCESS)
+    {
+        if (out_frame_len != NULL)
+        {
+            *out_frame_len = 0U;
+        }
+        return false;
+    }
+
+    latest_frame_len = frame_lengths[latest_frame_index];
+    latest_source_stride = frame_source_strides[latest_frame_index];
+    if ((latest_frame_len == 0U) || (out_frame_size < latest_frame_len))
+    {
+        cy_rtos_mutex_set(&latest_frame_mutex);
+        if (out_frame_len != NULL)
+        {
+            *out_frame_len = 0U;
+        }
+        return false;
+    }
+
+    memcpy(out_frame, frame_buffers[latest_frame_index], latest_frame_len);
+    cy_rtos_mutex_set(&latest_frame_mutex);
+
+    if (out_frame_len != NULL)
+    {
+        *out_frame_len = latest_frame_len;
+    }
+    if (out_width != NULL)
+    {
+        *out_width = USB_CAMERA_FRAME_WIDTH;
+    }
+    if (out_height != NULL)
+    {
+        *out_height = USB_CAMERA_FRAME_HEIGHT;
+    }
+    if (out_source_stride != NULL)
+    {
+        *out_source_stride = latest_source_stride;
+    }
+
+    return true;
+}
+
+bool usb_camera_host_borrow_latest_yuyv(const uint8_t **out_frame,
+                                        size_t *out_frame_len,
+                                        uint16_t *out_width,
+                                        uint16_t *out_height,
+                                        uint16_t *out_source_stride)
+{
+    if (out_frame != NULL)
+    {
+        *out_frame = NULL;
+    }
+    if (out_frame_len != NULL)
+    {
+        *out_frame_len = 0U;
+    }
+
+    if ((!usb_camera_host_initialized) ||
+        (!latest_frame_ready) ||
+        (out_frame == NULL) ||
+        (out_frame_len == NULL))
+    {
+        return false;
+    }
+
+    if (cy_rtos_mutex_get(&latest_frame_mutex, 1000U) != CY_RSLT_SUCCESS)
+    {
+        return false;
+    }
+
+    if (frame_lengths[latest_frame_index] == 0U)
+    {
+        cy_rtos_mutex_set(&latest_frame_mutex);
+        return false;
+    }
+
+    *out_frame = frame_buffers[latest_frame_index];
+    *out_frame_len = frame_lengths[latest_frame_index];
+    if (out_width != NULL)
+    {
+        *out_width = USB_CAMERA_FRAME_WIDTH;
+    }
+    if (out_height != NULL)
+    {
+        *out_height = USB_CAMERA_FRAME_HEIGHT;
+    }
+    if (out_source_stride != NULL)
+    {
+        *out_source_stride = frame_source_strides[latest_frame_index];
+    }
+
+    return true;
+}
+
+void usb_camera_host_release_latest_yuyv(void)
+{
+    (void)cy_rtos_mutex_set(&latest_frame_mutex);
+}
+
 bool usb_camera_host_is_stream_active(void)
 {
     return (usb_camera_stream_active && usb_camera_supported);
@@ -263,6 +412,7 @@ static void usb_camera_clear_latest_frame(void)
     if (cy_rtos_mutex_get(&latest_frame_mutex, 1000U) == CY_RSLT_SUCCESS)
     {
         latest_frame_ready = false;
+        frame_lengths[latest_frame_index] = 0U;
         cy_rtos_mutex_set(&latest_frame_mutex);
     }
     else
@@ -293,6 +443,10 @@ static bool usb_camera_open_device(U8 dev_index)
             if (status == USBH_STATUS_SUCCESS)
             {
                 usb_camera_device_opened = true;
+                printf("[CAMERA] VID=0x%04X PID=0x%04X\n",
+                       usb_camera_interface_info.VendorId,
+                       usb_camera_interface_info.ProductId);
+
                 return true;
             }
 
@@ -332,6 +486,119 @@ static void usb_camera_close_device(void)
     memset(&usb_camera_device_handle, 0, sizeof(usb_camera_device_handle));
     memset(&usb_camera_interface_info, 0, sizeof(usb_camera_interface_info));
     usb_camera_device_opened = false;
+}
+
+static void usb_camera_reset_capture_state(void)
+{
+    usb_camera_capture_bytes = 0U;
+    usb_camera_capture_raw_bytes = 0U;
+    usb_camera_drop_frame = false;
+}
+
+static void usb_camera_signal_snapshot_ready(void)
+{
+    U8 signal = USB_CAMERA_SIGNAL_SNAPSHOT_READY;
+
+    snapshot_capture_success = true;
+    snapshot_request_pending = false;
+    (void)cy_rtos_queue_put(&device_state_mail_box, &signal, 0U);
+}
+
+static void usb_camera_append_eof_frame_data(const U8 *p_data, size_t num_bytes, U32 flags)
+{
+    const size_t expected_frame_bytes = usb_camera_get_expected_frame_bytes();
+
+    (void)flags;
+
+    if ((p_data == NULL) || (num_bytes == 0U))
+    {
+        return;
+    }
+
+    usb_camera_capture_raw_bytes += num_bytes;
+
+    if (usb_camera_drop_frame)
+    {
+        return;
+    }
+
+    if ((usb_camera_capture_bytes + num_bytes) > expected_frame_bytes)
+    {
+        usb_camera_drop_frame = true;
+        usb_camera_overflow_frame_count++;
+        usb_camera_capture_bytes = 0U;
+        return;
+    }
+
+    memcpy(&frame_buffers[capture_frame_index][usb_camera_capture_bytes],
+           p_data,
+           num_bytes);
+    usb_camera_capture_bytes += num_bytes;
+}
+
+static void usb_camera_finish_eof_frame(U32 flags)
+{
+    const size_t expected_frame_bytes = usb_camera_get_expected_frame_bytes();
+
+    if (usb_camera_drop_frame)
+    {
+        usb_camera_short_frame_count++;
+#if USB_CAMERA_FRAME_TRACE_LOGS
+        if ((usb_camera_complete_frame_count + usb_camera_short_frame_count) <=
+            USB_CAMERA_FRAME_TRACE_LIMIT)
+        {
+            printf("[CAMERA] Dropping overflow frame raw=%lu expected=%lu short=%lu overflow=%lu flags=0x%lx\n",
+                   (unsigned long)usb_camera_capture_raw_bytes,
+                   (unsigned long)expected_frame_bytes,
+                   (unsigned long)usb_camera_short_frame_count,
+                   (unsigned long)usb_camera_overflow_frame_count,
+                   (unsigned long)flags);
+        }
+#endif
+    }
+    else if ((usb_camera_capture_bytes == expected_frame_bytes) &&
+             usb_camera_publish_capture_frame(usb_camera_capture_bytes))
+    {
+        usb_camera_complete_frame_count++;
+#if USB_CAMERA_FRAME_TRACE_LOGS
+        if ((usb_camera_complete_frame_count + usb_camera_short_frame_count) <=
+            USB_CAMERA_FRAME_TRACE_LIMIT)
+        {
+            printf("[CAMERA] Frame complete captured=%lu raw=%lu complete=%lu short=%lu overflow=%lu flags=0x%lx\n",
+                   (unsigned long)usb_camera_capture_bytes,
+                   (unsigned long)usb_camera_capture_raw_bytes,
+                   (unsigned long)usb_camera_complete_frame_count,
+                   (unsigned long)usb_camera_short_frame_count,
+                   (unsigned long)usb_camera_overflow_frame_count,
+                   (unsigned long)flags);
+        }
+#endif
+        if (snapshot_request_pending)
+        {
+            usb_camera_signal_snapshot_ready();
+        }
+    }
+    else
+    {
+        usb_camera_short_frame_count++;
+#if USB_CAMERA_FRAME_TRACE_LOGS
+        if ((usb_camera_complete_frame_count + usb_camera_short_frame_count) <=
+            USB_CAMERA_FRAME_TRACE_LIMIT)
+        {
+            printf("[CAMERA] Dropping short frame captured=%lu expected=%lu raw=%lu short=%lu overflow=%lu flags=0x%lx\n",
+                   (unsigned long)usb_camera_capture_bytes,
+                   (unsigned long)expected_frame_bytes,
+                   (unsigned long)usb_camera_capture_raw_bytes,
+                   (unsigned long)usb_camera_short_frame_count,
+                   (unsigned long)usb_camera_overflow_frame_count,
+                   (unsigned long)flags);
+        }
+#endif
+    }
+
+    usb_camera_capture_bytes = 0U;
+    usb_camera_capture_raw_bytes = 0U;
+    usb_camera_drop_frame = false;
 }
 
 static void usb_camera_task(void *arg)
@@ -433,8 +700,6 @@ static void usb_camera_on_data_cb(USBH_VIDEO_DEVICE_HANDLE h_device,
                                   U32 flags,
                                   void *p_user_data_context)
 {
-    static size_t frame_bytes = 0U;
-    static uint8_t drop_frame = 0U;
     USBH_STATUS restart_status = USBH_STATUS_SUCCESS;
     I8 is_stream_stopped = 0;
 
@@ -444,8 +709,7 @@ static void usb_camera_on_data_cb(USBH_VIDEO_DEVICE_HANDLE h_device,
     if (status != USBH_STATUS_SUCCESS)
     {
         U8 signal = USB_CAMERA_SIGNAL_TRANSFER_ERROR;
-        frame_bytes = 0U;
-        drop_frame = 0U;
+        usb_camera_reset_capture_state();
 
         if (snapshot_capture_success)
         {
@@ -523,41 +787,10 @@ static void usb_camera_on_data_cb(USBH_VIDEO_DEVICE_HANDLE h_device,
 
     usb_camera_stream_error_count = 0U;
 
-    if ((frame_bytes + num_bytes) > USB_CAMERA_FRAME_BYTES)
+    usb_camera_append_eof_frame_data(p_data, (size_t)num_bytes, flags);
+    if ((flags & USBH_UVC_END_OF_FRAME) != 0U)
     {
-        drop_frame = 1U;
-        frame_bytes = 0U;
-    }
-
-    if (!drop_frame)
-    {
-        memcpy(&frame_buffers[capture_frame_index][frame_bytes], p_data, num_bytes);
-        frame_bytes += num_bytes;
-    }
-
-    if ((flags & USBH_UVC_END_OF_FRAME) == USBH_UVC_END_OF_FRAME)
-    {
-        if ((!drop_frame) && (frame_bytes == USB_CAMERA_FRAME_BYTES))
-        {
-            if (cy_rtos_mutex_get(&latest_frame_mutex, 1000U) == CY_RSLT_SUCCESS)
-            {
-                latest_frame_index = capture_frame_index;
-                latest_frame_ready = true;
-                capture_frame_index = (uint8_t)((capture_frame_index + 1U) % USB_CAMERA_NUM_FRAME_BUFFERS);
-                cy_rtos_mutex_set(&latest_frame_mutex);
-            }
-
-            if (snapshot_request_pending)
-            {
-                U8 signal = USB_CAMERA_SIGNAL_SNAPSHOT_READY;
-                snapshot_capture_success = true;
-                snapshot_request_pending = false;
-                (void)cy_rtos_queue_put(&device_state_mail_box, &signal, 0U);
-            }
-        }
-
-        frame_bytes = 0U;
-        drop_frame = 0U;
+        usb_camera_finish_eof_frame(flags);
     }
 
     (void)USBH_VIDEO_Ack(h_stream);
@@ -580,6 +813,11 @@ static void usb_camera_handle_device(U8 dev_index)
         return;
     }
 
+    usb_camera_complete_frame_count = 0U;
+    usb_camera_short_frame_count = 0U;
+    usb_camera_overflow_frame_count = 0U;
+    usb_camera_reset_capture_state();
+
     frame_interval = usb_camera_frame_interval_for_device(usb_camera_interface_info.VendorId,
                                                           usb_camera_interface_info.ProductId);
     if (frame_interval == 0U)
@@ -591,9 +829,14 @@ static void usb_camera_handle_device(U8 dev_index)
         return;
     }
 
-    if (!usb_camera_select_stream(usb_camera_device_handle, frame_interval, &stream_info, &selected_interval))
+    if (!usb_camera_select_stream(usb_camera_device_handle,
+                                  frame_interval,
+                                  &stream_info,
+                                  &selected_interval))
     {
-        printf("[CAMERA] Unable to find supported 320x240 YUYV stream\n");
+        printf("[CAMERA] Unable to find supported %ux%u YUYV stream\n",
+               (unsigned)USB_CAMERA_FRAME_WIDTH,
+               (unsigned)USB_CAMERA_FRAME_HEIGHT);
         usb_camera_close_device();
         return;
     }
@@ -615,6 +858,9 @@ static void usb_camera_handle_device(U8 dev_index)
            (unsigned)USB_CAMERA_FRAME_WIDTH,
            (unsigned)USB_CAMERA_FRAME_HEIGHT,
            (selected_interval != 0U) ? (10000000.0f / (float)selected_interval) : 0.0f);
+    printf("[CAMERA] Using Infineon-style emUSB frame assembly, sourceStride=%lu frameBytes=%lu\n",
+           (unsigned long)USB_CAMERA_ROW_BYTES,
+           (unsigned long)USB_CAMERA_FRAME_BYTES);
 
     cy_rtos_queue_reset(&device_state_mail_box);
     while (device_connected != 0U)
@@ -643,12 +889,12 @@ static void usb_camera_handle_device(U8 dev_index)
     usb_camera_supported = false;
     usb_camera_stream_active = false;
     printf("[CAMERA] USB stream stopped\n");
-    usb_camera_close_device();
 
     if ((signal == USB_CAMERA_SIGNAL_TRANSFER_ERROR) ||
         (signal == USB_CAMERA_SIGNAL_DEVICE_REMOVED) ||
         (signal == USB_CAMERA_SIGNAL_SNAPSHOT_ABORT))
     {
+        usb_camera_close_device();
         snapshot_capture_success = false;
         if (latest_frame_ready)
         {
@@ -677,12 +923,21 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
     unsigned fallback_frame_index = 0U;
     unsigned fallback_interval_index = 0U;
     uint32_t fallback_interval = 0U;
+    uint8_t fallback_bits_per_pixel = 0U;
+    uint8_t fallback_guid[USBH_VIDEO_GUID_LEN] = {0U};
+    uint32_t fallback_min_bit_rate = 0U;
+    uint32_t fallback_max_bit_rate = 0U;
 
     status = USBH_VIDEO_GetInputHeader(h_device, &input_header_info);
     if (status != USBH_STATUS_SUCCESS)
     {
         return false;
     }
+    printf("[CAMERA] Input header: stillMethod=%u triggerSupport=%u triggerUsage=%u controlSize=%u\n",
+           (unsigned)input_header_info.bStillCaptureMethod,
+           (unsigned)input_header_info.bTriggerSupport,
+           (unsigned)input_header_info.bTriggerUsage,
+           (unsigned)input_header_info.bControlSize);
 
     for (format_index = 0U; format_index < input_header_info.bNumFormats; format_index++)
     {
@@ -697,7 +952,7 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
             continue;
         }
 
-        frame_descriptor_count = format_info.u.UncompressedFormat.bNumFrameDescriptors;
+        frame_descriptor_count = usb_camera_get_frame_descriptor_count(&format_info);
         for (frame_index = 0U; frame_index < frame_descriptor_count; frame_index++)
         {
             status = USBH_VIDEO_GetFrameInfo(h_device, format_index, frame_index, &frame_info);
@@ -726,6 +981,27 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
                     {
                         *selected_interval = frame_info.u.dwFrameInterval[interval_index];
                     }
+                    printf("[CAMERA] Selected UVC format: bitsPerPixel=%u frameCaps=0x%02X guid=%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X minBitRate=%lu maxBitRate=%lu\n",
+                           (unsigned)format_info.u.UncompressedFormat.bBitsPerPixel,
+                           (unsigned)frame_info.bmCapabilities,
+                           format_info.u.UncompressedFormat.guidFormat[0],
+                           format_info.u.UncompressedFormat.guidFormat[1],
+                           format_info.u.UncompressedFormat.guidFormat[2],
+                           format_info.u.UncompressedFormat.guidFormat[3],
+                           format_info.u.UncompressedFormat.guidFormat[4],
+                           format_info.u.UncompressedFormat.guidFormat[5],
+                           format_info.u.UncompressedFormat.guidFormat[6],
+                           format_info.u.UncompressedFormat.guidFormat[7],
+                           format_info.u.UncompressedFormat.guidFormat[8],
+                           format_info.u.UncompressedFormat.guidFormat[9],
+                           format_info.u.UncompressedFormat.guidFormat[10],
+                           format_info.u.UncompressedFormat.guidFormat[11],
+                           format_info.u.UncompressedFormat.guidFormat[12],
+                           format_info.u.UncompressedFormat.guidFormat[13],
+                           format_info.u.UncompressedFormat.guidFormat[14],
+                           format_info.u.UncompressedFormat.guidFormat[15],
+                           (unsigned long)frame_info.dwMinBitRate,
+                           (unsigned long)frame_info.dwMaxBitRate);
                     return true;
                 }
 
@@ -736,6 +1012,12 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
                     fallback_frame_index = frame_index;
                     fallback_interval_index = interval_index + 1U;
                     fallback_interval = frame_info.u.dwFrameInterval[interval_index];
+                    fallback_bits_per_pixel = format_info.u.UncompressedFormat.bBitsPerPixel;
+                    memcpy(fallback_guid,
+                           format_info.u.UncompressedFormat.guidFormat,
+                           sizeof(fallback_guid));
+                    fallback_min_bit_rate = frame_info.dwMinBitRate;
+                    fallback_max_bit_rate = frame_info.dwMaxBitRate;
                 }
             }
         }
@@ -756,8 +1038,49 @@ static bool usb_camera_select_stream(USBH_VIDEO_DEVICE_HANDLE h_device,
     {
         *selected_interval = fallback_interval;
     }
+    printf("[CAMERA] Selected fallback UVC format: bitsPerPixel=%u guid=%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X minBitRate=%lu maxBitRate=%lu\n",
+           (unsigned)fallback_bits_per_pixel,
+           fallback_guid[0],
+           fallback_guid[1],
+           fallback_guid[2],
+           fallback_guid[3],
+           fallback_guid[4],
+           fallback_guid[5],
+           fallback_guid[6],
+           fallback_guid[7],
+           fallback_guid[8],
+           fallback_guid[9],
+           fallback_guid[10],
+           fallback_guid[11],
+           fallback_guid[12],
+           fallback_guid[13],
+           fallback_guid[14],
+           fallback_guid[15],
+           (unsigned long)fallback_min_bit_rate,
+           (unsigned long)fallback_max_bit_rate);
     printf("[CAMERA] Preferred frame interval unavailable, falling back to slowest supported mode\n");
     return true;
+}
+
+static unsigned usb_camera_get_frame_descriptor_count(const USBH_VIDEO_FORMAT_INFO *format_info)
+{
+    if (format_info == NULL)
+    {
+        return 0U;
+    }
+
+    switch (format_info->FormatType)
+    {
+        case USBH_VIDEO_VS_FORMAT_UNCOMPRESSED:
+            return format_info->u.UncompressedFormat.bNumFrameDescriptors;
+        case USBH_VIDEO_VS_FORMAT_MJPEG:
+            return format_info->u.MJPEG_Format.bNumFrameDescriptors;
+        case USBH_VIDEO_VS_FORMAT_FRAME_BASED:
+        case USBH_VIDEO_VS_FORMAT_H264:
+            return format_info->u.H264_Format.bNumFrameDescriptors;
+        default:
+            return 0U;
+    }
 }
 
 static uint32_t usb_camera_frame_interval_for_device(uint16_t vendor_id, uint16_t product_id)
@@ -778,6 +1101,27 @@ static uint32_t usb_camera_frame_interval_for_device(uint16_t vendor_id, uint16_
     return 0U;
 }
 
+static bool usb_camera_publish_capture_frame(size_t frame_len)
+{
+    if (cy_rtos_mutex_get(&latest_frame_mutex, 0U) != CY_RSLT_SUCCESS)
+    {
+        return false;
+    }
+
+    frame_lengths[capture_frame_index] = frame_len;
+    frame_source_strides[capture_frame_index] = (uint16_t)USB_CAMERA_ROW_BYTES;
+    latest_frame_index = capture_frame_index;
+    latest_frame_ready = true;
+    capture_frame_index = (uint8_t)((capture_frame_index + 1U) % USB_CAMERA_NUM_FRAME_BUFFERS);
+    cy_rtos_mutex_set(&latest_frame_mutex);
+    return true;
+}
+
+static size_t usb_camera_get_expected_frame_bytes(void)
+{
+    return USB_CAMERA_FRAME_BYTES;
+}
+
 static void usb_camera_build_bmp_from_latest(uint8_t *out_bmp,
                                              size_t out_bmp_size,
                                              size_t *out_bmp_len,
@@ -788,6 +1132,9 @@ static void usb_camera_build_bmp_from_latest(uint8_t *out_bmp,
     const uint32_t row_stride = ((USB_CAMERA_SNAPSHOT_WIDTH * 3U) + 3U) & ~3U;
     const uint32_t pixel_bytes = row_stride * USB_CAMERA_SNAPSHOT_HEIGHT;
     const uint32_t file_size = 54U + pixel_bytes;
+    const uint32_t source_row_bytes = frame_source_strides[latest_frame_index] != 0U
+                                        ? frame_source_strides[latest_frame_index]
+                                        : USB_CAMERA_ROW_BYTES;
     uint32_t x;
     uint32_t y;
 
@@ -833,7 +1180,7 @@ static void usb_camera_build_bmp_from_latest(uint8_t *out_bmp,
             uint8_t g;
             uint8_t b;
 
-            yuyv_to_rgb_pixel(frame, src_x, src_y, &r, &g, &b);
+            yuyv_to_rgb_pixel(frame, source_row_bytes, src_x, src_y, &r, &g, &b);
             row[(x * 3U) + 0U] = b;
             row[(x * 3U) + 1U] = g;
             row[(x * 3U) + 2U] = r;
@@ -854,11 +1201,14 @@ static void usb_camera_build_bmp_from_latest(uint8_t *out_bmp,
     }
 }
 
-static void yuyv_to_rgb_pixel(const uint8_t *frame, uint16_t x, uint16_t y,
+static void yuyv_to_rgb_pixel(const uint8_t *frame,
+                              uint32_t source_row_bytes,
+                              uint16_t x,
+                              uint16_t y,
                               uint8_t *r, uint8_t *g, uint8_t *b)
 {
     const uint32_t pair_x = (uint32_t)(x & (uint16_t)~1U);
-    const uint32_t idx = ((uint32_t)y * USB_CAMERA_FRAME_WIDTH + pair_x) * 2U;
+    const uint32_t idx = ((uint32_t)y * source_row_bytes) + (pair_x * 2U);
     const int32_t y0 = frame[idx + 0U];
     const int32_t u = frame[idx + 1U] - 128;
     const int32_t y1 = frame[idx + 2U];

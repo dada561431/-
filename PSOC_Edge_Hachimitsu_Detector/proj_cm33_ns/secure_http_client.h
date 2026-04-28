@@ -39,6 +39,7 @@
 
 /* FreeRTOS header file */
 #include "FreeRTOS.h"
+#include <stdint.h>
 #include <task.h>
 #include "cy_http_client_api.h"
 #include "cy_wcm.h"
@@ -53,8 +54,8 @@
 /* Wi-Fi Credentials: Modify WIFI_SSID and WIFI_PASSWORD to match your Wi-Fi
  * network Credentials.
  */
-#define WIFI_SSID                                "abc"
-#define WIFI_PASSWORD                            "12345678"
+#define WIFI_SSID                                "301"
+#define WIFI_PASSWORD                            "1234554321"
 
 /* Security type of the Wi-Fi access point. See 'cy_wcm_security_t' structure
  * in "cy_wcm.h" for more details.
@@ -73,8 +74,8 @@
                                          }                              \
                                      } while(0);
 #define HTTPS_PORT                               8080
-#define HTTPS_SERVER_HOST                        "192.168.68.252"
-#define TRANSPORT_SEND_RECV_TIMEOUT_MS           (1000U)
+#define HTTPS_SERVER_HOST                        "192.168.3.32"
+#define TRANSPORT_SEND_RECV_TIMEOUT_MS           (10000U)
 #define HTTP_GET_BUFFER_LENGTH                   (2048U)
 
 /* Wi-Fi re-connection time interval in milliseconds */
@@ -104,6 +105,12 @@
 void https_client_task(void *arg);
 cy_rslt_t fetch_https_client_method(cy_http_client_method_t method, const char * path,
                                     const char * req_body, cy_http_client_response_t * resp_body);
+cy_rslt_t fetch_https_client_binary_method(cy_http_client_method_t method,
+                                           const char *path,
+                                           const char *content_type,
+                                           const uint8_t *payload,
+                                           uint32_t payload_len,
+                                           cy_http_client_response_t *resp_body);
 
 #endif /* SECURE_HTTP_CLIENT_H_ */
 

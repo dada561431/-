@@ -33,6 +33,7 @@ static cy_thread_t camera_warmup_thread;
 static bool camera_warmup_started = false;
 
 static size_t base64_encode_bytes(const uint8_t *input, size_t input_len, char *output, size_t output_size);
+static bool ensure_snapshot_frame_available(const ipc_msg_t *msg, bool *out_reused_frame);
 static bool prepare_snapshot_payload(AddMeowDto *dto, bool reused_frame);
 static void camera_capture_warmup_task(void *arg);
 
@@ -76,10 +77,7 @@ cy_rslt_t camera_capture_init(void)
 
 bool camera_capture_fill_meow_payload(AddMeowDto *dto, const ipc_msg_t *msg)
 {
-    size_t bmp_len = 0U;
-    uint32_t timeout_ms;
-    bool snapshot_ready = false;
-    bool request_fresh_snapshot = false;
+    bool reused_frame = false;
 
     if (dto == NULL)
     {
@@ -94,7 +92,99 @@ bool camera_capture_fill_meow_payload(AddMeowDto *dto, const ipc_msg_t *msg)
         return false;
     }
 
-    request_fresh_snapshot = ((msg != NULL) && (msg->request_snapshot != 0U));
+    if (ensure_snapshot_frame_available(msg, &reused_frame))
+    {
+        return prepare_snapshot_payload(dto, reused_frame);
+    }
+
+    return false;
+}
+
+bool camera_capture_get_yuyv_snapshot(const ipc_msg_t *msg,
+                                      const uint8_t **out_frame,
+                                      size_t *out_frame_len,
+                                      uint16_t *out_width,
+                                      uint16_t *out_height,
+                                      uint16_t *out_source_stride,
+                                      bool *out_reused_frame)
+{
+    size_t frame_len = 0U;
+    uint16_t width = 0U;
+    uint16_t height = 0U;
+    uint16_t source_stride = 0U;
+    bool reused_frame = false;
+
+    if (out_frame != NULL)
+    {
+        *out_frame = NULL;
+    }
+    if (out_frame_len != NULL)
+    {
+        *out_frame_len = 0U;
+    }
+
+    if ((out_frame == NULL) || (out_frame_len == NULL) || (!camera_capture_initialized))
+    {
+        return false;
+    }
+
+    if (!ensure_snapshot_frame_available(msg, &reused_frame))
+    {
+        return false;
+    }
+
+    if (!usb_camera_host_borrow_latest_yuyv(out_frame,
+                                            &frame_len,
+                                            &width,
+                                            &height,
+                                            &source_stride))
+    {
+        printf("[CAMERA] Unable to borrow latest YUYV frame for upload.\n");
+        return false;
+    }
+
+    *out_frame_len = frame_len;
+    if (out_width != NULL)
+    {
+        *out_width = width;
+    }
+    if (out_height != NULL)
+    {
+        *out_height = height;
+    }
+    if (out_source_stride != NULL)
+    {
+        *out_source_stride = source_stride;
+    }
+    if (out_reused_frame != NULL)
+    {
+        *out_reused_frame = reused_frame;
+    }
+
+    printf("[CAMERA] YUYV snapshot ready %ux%u stride=%u (%lu bytes)%s\n",
+           (unsigned)width,
+           (unsigned)height,
+           (unsigned)source_stride,
+           (unsigned long)frame_len,
+           reused_frame ? " reused" : "");
+    return true;
+}
+
+void camera_capture_release_yuyv_snapshot(void)
+{
+    usb_camera_host_release_latest_yuyv();
+}
+
+static bool ensure_snapshot_frame_available(const ipc_msg_t *msg, bool *out_reused_frame)
+{
+    uint32_t timeout_ms;
+    bool snapshot_ready;
+    bool request_fresh_snapshot = ((msg != NULL) && (msg->request_snapshot != 0U));
+
+    if (out_reused_frame != NULL)
+    {
+        *out_reused_frame = true;
+    }
 
     if (!camera_cached_snapshot_available)
     {
@@ -108,17 +198,8 @@ bool camera_capture_fill_meow_payload(AddMeowDto *dto, const ipc_msg_t *msg)
 
     if (!request_fresh_snapshot)
     {
-        if (usb_camera_host_get_snapshot_bmp(camera_bmp_buffer,
-                                             sizeof(camera_bmp_buffer),
-                                             &bmp_len,
-                                             NULL,
-                                             NULL))
-        {
-            camera_capture_warning_printed = false;
-            return prepare_snapshot_payload(dto, true);
-        }
-
-        return false;
+        camera_capture_warning_printed = false;
+        return true;
     }
 
     if (camera_failure_cooldown > 0U)
@@ -126,10 +207,10 @@ bool camera_capture_fill_meow_payload(AddMeowDto *dto, const ipc_msg_t *msg)
         camera_failure_cooldown--;
         if (!camera_capture_warning_printed)
         {
-            printf("[CAMERA] Snapshot retry cooldown active, skipping new camera request.\n");
+            printf("[CAMERA] Snapshot retry cooldown active, reusing cached frame.\n");
             camera_capture_warning_printed = true;
         }
-        return false;
+        return true;
     }
 
     printf("[CAMERA] Requesting on-demand snapshot\n");
@@ -138,39 +219,25 @@ bool camera_capture_fill_meow_payload(AddMeowDto *dto, const ipc_msg_t *msg)
                      : CAMERA_CAPTURE_INITIAL_TIMEOUT_MS;
 
     snapshot_ready = usb_camera_host_request_snapshot(timeout_ms);
-    if (snapshot_ready &&
-        usb_camera_host_get_snapshot_bmp(camera_bmp_buffer,
-                                         sizeof(camera_bmp_buffer),
-                                         &bmp_len,
-                                         NULL,
-                                         NULL))
+    if (snapshot_ready)
     {
         camera_capture_warning_printed = false;
         camera_warmup_warning_printed = false;
         camera_failure_cooldown = 0U;
         camera_cached_snapshot_available = true;
-        return prepare_snapshot_payload(dto, false);
+        if (out_reused_frame != NULL)
+        {
+            *out_reused_frame = false;
+        }
+        return true;
     }
 
-    if (!snapshot_ready)
-    {
-        camera_failure_cooldown = CAMERA_CAPTURE_FAILURE_COOLDOWN;
-    }
-    else
-    {
-        printf("[CAMERA] Snapshot completed but no frame buffer was produced.\n");
-    }
-
-    if (camera_cached_snapshot_available &&
-        usb_camera_host_get_snapshot_bmp(camera_bmp_buffer,
-                                         sizeof(camera_bmp_buffer),
-                                         &bmp_len,
-                                         NULL,
-                                         NULL))
+    camera_failure_cooldown = CAMERA_CAPTURE_FAILURE_COOLDOWN;
+    if (camera_cached_snapshot_available)
     {
         printf("[CAMERA] Reusing last successful snapshot because a fresh frame was unavailable.\n");
         camera_capture_warning_printed = false;
-        return prepare_snapshot_payload(dto, true);
+        return true;
     }
 
     if (!camera_capture_warning_printed)

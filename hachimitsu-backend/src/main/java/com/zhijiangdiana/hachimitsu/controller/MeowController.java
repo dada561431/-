@@ -7,9 +7,11 @@ import com.zhijiangdiana.hachimitsu.service.MeowService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -32,5 +34,23 @@ public class MeowController {
             return ResponseResult.okResult();
         }
         return ResponseResult.errorResult(500, "image attach failed");
+    }
+
+    @PostMapping(value = "/attach-yuyv", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseResult attachYuyvImage(@RequestParam String equipmentId,
+                                          @RequestParam Long timestamp,
+                                          @RequestParam Integer width,
+                                          @RequestParam Integer height,
+                                          @RequestParam(required = false) Integer sourceStride,
+                                          @RequestParam(defaultValue = "YUYV") String pixelFormat,
+                                          @RequestBody byte[] imageBytes) {
+        if (!"YUYV".equalsIgnoreCase(pixelFormat) && !"YUY2".equalsIgnoreCase(pixelFormat)) {
+            return ResponseResult.errorResult(400, "unsupported pixel format");
+        }
+
+        if (meowService.attachRawYuyvImage(equipmentId, timestamp, imageBytes, width, height, sourceStride)) {
+            return ResponseResult.okResult();
+        }
+        return ResponseResult.errorResult(500, "raw image attach failed");
     }
 }

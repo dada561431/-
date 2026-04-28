@@ -12,19 +12,24 @@
 #include "time_utils.h"
 #include "cy_utils.h"
 #include <stdio.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include "cycfg_clocks.h"
 
 #define MEOW_ADD "/meow/add"
 #define MEOW_ATTACH_IMAGE "/meow/attach-image"
+#define MEOW_ATTACH_YUYV "/meow/attach-yuyv"
 #define RTC_SYNC_PATH "/rtc/get"
 #define MEOW_ADD_JSON_BUFFER_SIZE (512U)
 #define ATTACH_IMAGE_JSON_BUFFER_SIZE (65536U)
+#define ATTACH_YUYV_PATH_BUFFER_SIZE (256U)
 
 static char meow_add_json_buffer[MEOW_ADD_JSON_BUFFER_SIZE];
 CY_SECTION(".cy_gpu_buf")
 static char attach_image_json_buffer[ATTACH_IMAGE_JSON_BUFFER_SIZE];
+static char attach_yuyv_path_buffer[ATTACH_YUYV_PATH_BUFFER_SIZE];
 
 static bool build_meow_add_json(const AddMeowDto *dto,
                                 char *buffer,
@@ -133,15 +138,77 @@ static void send_hachimitsu_image(const ipc_msg_t *msg,
     AddMeowDto snapshotDto = {0};
     AttachMeowImageDto attachDto = {0};
     cy_http_client_response_t response;
+    const uint8_t *yuyv_frame = NULL;
+    size_t yuyv_len = 0U;
+    uint16_t yuyv_width = 0U;
+    uint16_t yuyv_height = 0U;
+    uint16_t yuyv_source_stride = 0U;
+    bool yuyv_reused_frame = false;
+    bool yuyv_frame_borrowed = false;
+    char timestamp_buffer[24];
+    int path_len;
+    ipc_msg_t fallback_msg;
 
     if (msg == NULL)
     {
         return;
     }
 
+    yuyv_frame_borrowed = camera_capture_get_yuyv_snapshot(msg,
+                                                           &yuyv_frame,
+                                                           &yuyv_len,
+                                                           &yuyv_width,
+                                                           &yuyv_height,
+                                                           &yuyv_source_stride,
+                                                           &yuyv_reused_frame);
+    if (yuyv_frame_borrowed &&
+        format_int64_decimal(timestamp, timestamp_buffer, sizeof(timestamp_buffer)))
+    {
+        path_len = snprintf(attach_yuyv_path_buffer,
+                            sizeof(attach_yuyv_path_buffer),
+                            "%s?equipmentId=%s&timestamp=%s&width=%u&height=%u&sourceStride=%u&pixelFormat=YUYV",
+                            MEOW_ATTACH_YUYV,
+                            equipment_id,
+                            timestamp_buffer,
+                            (unsigned)yuyv_width,
+                            (unsigned)yuyv_height,
+                            (unsigned)yuyv_source_stride);
+        if ((path_len >= 0) && ((size_t)path_len < sizeof(attach_yuyv_path_buffer)))
+        {
+            printf("[HTTP Task] Raw YUYV upload length=%lu stride=%u reused=%u\n",
+                   (unsigned long)yuyv_len,
+                   (unsigned)yuyv_source_stride,
+                   yuyv_reused_frame ? 1U : 0U);
+            if (fetch_https_client_binary_method(CY_HTTP_CLIENT_METHOD_POST,
+                                                 attach_yuyv_path_buffer,
+                                                 "application/octet-stream",
+                                                 yuyv_frame,
+                                                 (uint32_t)yuyv_len,
+                                                 &response) == CY_RSLT_SUCCESS)
+            {
+                camera_capture_release_yuyv_snapshot();
+                printf("[HTTP Task] Raw YUYV image upload completed\n");
+                return;
+            }
+
+            printf("[HTTP Task] Raw YUYV image upload failed, trying thumbnail fallback\n");
+        }
+        else
+        {
+            printf("[HTTP Task] Raw YUYV upload path is too long\n");
+        }
+    }
+
+    if (yuyv_frame_borrowed)
+    {
+        camera_capture_release_yuyv_snapshot();
+    }
+
+    fallback_msg = *msg;
+    fallback_msg.request_snapshot = 0U;
     snprintf(snapshotDto.equipmentId, sizeof(snapshotDto.equipmentId), "%s", equipment_id);
     snapshotDto.timestamp = timestamp;
-    if (!camera_capture_fill_meow_payload(&snapshotDto, msg))
+    if (!camera_capture_fill_meow_payload(&snapshotDto, &fallback_msg))
     {
         return;
     }

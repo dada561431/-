@@ -22,5 +22,17 @@ bool usb_camera_host_get_snapshot_bmp(uint8_t *out_bmp,
                                       size_t *out_bmp_len,
                                       uint16_t *out_width,
                                       uint16_t *out_height);
+bool usb_camera_host_get_latest_yuyv(uint8_t *out_frame,
+                                     size_t out_frame_size,
+                                     size_t *out_frame_len,
+                                     uint16_t *out_width,
+                                     uint16_t *out_height,
+                                     uint16_t *out_source_stride);
+bool usb_camera_host_borrow_latest_yuyv(const uint8_t **out_frame,
+                                        size_t *out_frame_len,
+                                        uint16_t *out_width,
+                                        uint16_t *out_height,
+                                        uint16_t *out_source_stride);
+void usb_camera_host_release_latest_yuyv(void);
 
 #endif /* USB_CAMERA_HOST_H_ */

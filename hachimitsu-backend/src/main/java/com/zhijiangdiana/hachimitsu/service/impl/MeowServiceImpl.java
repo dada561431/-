@@ -129,6 +129,44 @@ public class MeowServiceImpl implements MeowService {
         return attachStoredImageToMeow(dto.getEquipmentId(), dto.getTimestamp(), imageUrl);
     }
 
+    @Override
+    public boolean attachRawYuyvImage(String equipmentId,
+                                      Long timestamp,
+                                      byte[] yuyvImage,
+                                      int width,
+                                      int height,
+                                      Integer sourceStride) {
+        String imageUrl;
+
+        if ((equipmentId == null) || equipmentId.isBlank() || (timestamp == null) ||
+                (yuyvImage == null) || (yuyvImage.length == 0) || (width <= 0) || (height <= 0)) {
+            log.warn("Invalid raw YUYV attach payload. equipmentId={}, timestamp={}, width={}, height={}, payloadLength={}",
+                    equipmentId,
+                    timestamp,
+                    width,
+                    height,
+                    yuyvImage == null ? 0 : yuyvImage.length);
+            return false;
+        }
+
+        log.info("Processing raw YUYV image attach. equipmentId={}, timestamp={}, width={}, height={}, sourceStride={}, payloadLength={}",
+                equipmentId,
+                timestamp,
+                width,
+                height,
+                sourceStride,
+                yuyvImage.length);
+
+        imageUrl = imageStorageService.storeYuyvImage(yuyvImage, width, height, sourceStride, equipmentId, timestamp);
+        if ((imageUrl == null) || imageUrl.isBlank()) {
+            log.warn("Failed to store raw YUYV meow image. equipmentId={}, timestamp={}",
+                    equipmentId, timestamp);
+            return false;
+        }
+
+        return attachStoredImageToMeow(equipmentId, timestamp, imageUrl);
+    }
+
     private boolean attachStoredImageToMeow(String equipmentId, Long timestamp, String imageUrl) {
         Meow meow;
 

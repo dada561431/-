@@ -80,6 +80,13 @@ static cy_rslt_t send_http_request(cy_http_client_t handle,
                                    const char *path,
                                    const char *request_body,
                                    cy_http_client_response_t *response);
+static cy_rslt_t send_http_request_with_payload(cy_http_client_t handle,
+                                                cy_http_client_method_t method,
+                                                const char *path,
+                                                const char *content_type,
+                                                const uint8_t *payload,
+                                                uint32_t payload_len,
+                                                cy_http_client_response_t *response);
 static cy_rslt_t configure_https_client(void);
 static cy_rslt_t wifi_connect(void);
 static cy_rslt_t connect_to_server(void);
@@ -345,9 +352,36 @@ static cy_rslt_t send_http_request(cy_http_client_t handle,
                                    const char *request_body,
                                    cy_http_client_response_t *response)
 {
+    if ((request_body == NULL) || (*request_body == '\0'))
+    {
+        request_body = "{}";
+    }
+
+    return send_http_request_with_payload(handle,
+                                          method,
+                                          path,
+                                          "application/json",
+                                          (const uint8_t *)request_body,
+                                          (uint32_t)strlen(request_body),
+                                          response);
+}
+
+static cy_rslt_t send_http_request_with_payload(cy_http_client_t handle,
+                                                cy_http_client_method_t method,
+                                                const char *path,
+                                                const char *content_type,
+                                                const uint8_t *payload,
+                                                uint32_t payload_len,
+                                                cy_http_client_response_t *response)
+{
     cy_http_client_request_header_t request;
     cy_http_client_header_t header;
     cy_rslt_t http_status;
+
+    if ((content_type == NULL) || (*content_type == '\0'))
+    {
+        content_type = "application/octet-stream";
+    }
 
     request.buffer = http_get_buffer;
     request.buffer_len = HTTP_GET_BUFFER_LENGTH;
@@ -359,8 +393,8 @@ static cy_rslt_t send_http_request(cy_http_client_t handle,
 
     header.field = "Content-Type";
     header.field_len = sizeof("Content-Type") - LAST_INDEX;
-    header.value = "application/json";
-    header.value_len = sizeof("application/json") - LAST_INDEX;
+    header.value = content_type;
+    header.value_len = strlen(content_type);
 
     http_status = cy_http_client_write_header(handle, &request, &header, NUM_HTTP_HEADERS);
     if (CY_RSLT_SUCCESS != http_status)
@@ -369,15 +403,10 @@ static cy_rslt_t send_http_request(cy_http_client_t handle,
         return http_status;
     }
 
-    if ((request_body == NULL) || (*request_body == '\0'))
-    {
-        request_body = "{}";
-    }
-
     http_status = cy_http_client_send(handle,
                                       &request,
-                                      (uint8_t *)request_body,
-                                      (uint16_t)strlen(request_body),
+                                      (uint8_t *)payload,
+                                      payload_len,
                                       response);
     if (CY_RSLT_SUCCESS != http_status)
     {
@@ -564,6 +593,51 @@ cy_rslt_t fetch_https_client_method(cy_http_client_method_t method, const char *
     }
 
     ERR_INFO(("Failed to send the http request after retries.\n"));
+    return result;
+}
+
+cy_rslt_t fetch_https_client_binary_method(cy_http_client_method_t method,
+                                           const char *path,
+                                           const char *content_type,
+                                           const uint8_t *payload,
+                                           uint32_t payload_len,
+                                           cy_http_client_response_t *resp)
+{
+    cy_rslt_t result = CY_RSLT_SUCCESS;
+    uint32_t attempt;
+
+    if ((payload == NULL) || (payload_len == 0U))
+    {
+        printf("[HTTP_TASK] Binary request payload is empty\n");
+        return CY_RSLT_TYPE_ERROR;
+    }
+
+    for (attempt = 0U; attempt < HTTP_REQUEST_RETRY_COUNT; attempt++)
+    {
+        result = ensure_connection_ready();
+        if (CY_RSLT_SUCCESS != result)
+        {
+            ERR_INFO(("Failed to establish network before binary HTTP request.\n"));
+            continue;
+        }
+
+        result = send_http_request_with_payload(https_client,
+                                                method,
+                                                path,
+                                                content_type,
+                                                payload,
+                                                payload_len,
+                                                resp);
+        if (CY_RSLT_SUCCESS == result)
+        {
+            printf("ResponseBody: %s\r\n", resp->body);
+            return CY_RSLT_SUCCESS;
+        }
+
+        cleanup_http_client();
+    }
+
+    ERR_INFO(("Failed to send the binary http request after retries.\n"));
     return result;
 }
 
