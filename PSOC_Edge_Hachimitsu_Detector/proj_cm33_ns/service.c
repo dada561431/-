@@ -216,7 +216,6 @@ static void send_hachimitsu_image(const ipc_msg_t *msg,
     bool yuyv_frame_borrowed = false;
     char timestamp_buffer[24];
     int path_len;
-    ipc_msg_t fallback_msg;
 
     if (msg == NULL)
     {
@@ -273,11 +272,9 @@ static void send_hachimitsu_image(const ipc_msg_t *msg,
         camera_capture_release_yuyv_snapshot();
     }
 
-    fallback_msg = *msg;
-    fallback_msg.request_snapshot = 0U;
     snprintf(snapshotDto.equipmentId, sizeof(snapshotDto.equipmentId), "%s", equipment_id);
     snapshotDto.timestamp = timestamp;
-    if (!camera_capture_fill_meow_payload(&snapshotDto, &fallback_msg))
+    if (!camera_capture_fill_meow_payload(&snapshotDto, NULL))
     {
         return;
     }

@@ -128,6 +128,7 @@ static int window_filled = 0;                   // Number of valid samples in th
 static uint32_t report_cooldown_windows_remaining = 0;
 static uint32_t image_capture_cooldown_windows_remaining = 0;
 static uint32_t throttled_detection_counter = 0;
+static ipc_msg_t detection_msg;
 
 static void fill_ipc_audio_payload(ipc_msg_t *msg)
 {
@@ -384,19 +385,20 @@ cy_rslt_t pdm_data_process(void)
         }
         else
         {
-            ipc_msg_t msg = {0};
+            ipc_msg_t *msg = &detection_msg;
 
-            msg.confidence = confidence;
-            msg.timestamp = 0;
-            msg.request_snapshot = (image_capture_cooldown_windows_remaining == 0u) ? 1U : 0U;
-            fill_ipc_audio_payload(&msg);
+            memset(msg, 0, sizeof(*msg));
+            msg->confidence = confidence;
+            msg->timestamp = 0;
+            msg->request_snapshot = (image_capture_cooldown_windows_remaining == 0u) ? 1U : 0U;
+            fill_ipc_audio_payload(msg);
 
             printf("[Hachimitsu Detector] Detected hachimitsu voice, confidence=%.2f\n", confidence);
-            if (!write_msg(&msg))
+            if (!write_msg(msg))
             {
                 printf("[Hachimitsu Detector] Msg queued failed, CM33 sender is busy.\n");
             }
-            else if (msg.request_snapshot != 0U)
+            else if (msg->request_snapshot != 0U)
             {
                 image_capture_cooldown_windows_remaining = IMAGE_CAPTURE_COOLDOWN_WINDOWS;
             }
