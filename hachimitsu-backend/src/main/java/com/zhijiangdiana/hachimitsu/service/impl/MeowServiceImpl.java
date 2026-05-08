@@ -6,6 +6,7 @@ import com.zhijiangdiana.hachimitsu.pojo.AddressDto;
 import com.zhijiangdiana.hachimitsu.pojo.AttachMeowImageDto;
 import com.zhijiangdiana.hachimitsu.pojo.Meow;
 import com.zhijiangdiana.hachimitsu.service.AddressService;
+import com.zhijiangdiana.hachimitsu.service.AudioStorageService;
 import com.zhijiangdiana.hachimitsu.service.CacheService;
 import com.zhijiangdiana.hachimitsu.service.ImageStorageService;
 import com.zhijiangdiana.hachimitsu.service.MeowService;
@@ -47,6 +48,9 @@ public class MeowServiceImpl implements MeowService {
 
     @Autowired
     private ImageStorageService imageStorageService;
+
+    @Autowired
+    private AudioStorageService audioStorageService;
 
     @Override
     public void saveMeowLog(AddMeowDto dto, String ip) {
@@ -167,6 +171,76 @@ public class MeowServiceImpl implements MeowService {
         return attachStoredImageToMeow(equipmentId, timestamp, imageUrl);
     }
 
+    @Override
+    public boolean attachPcmAudio(String equipmentId,
+                                  Long timestamp,
+                                  byte[] pcmAudio,
+                                  int sampleRate,
+                                  int bitsPerSample,
+                                  int channelCount,
+                                  Integer sampleCount) {
+        String audioUrl;
+        Integer resolvedSampleCount;
+        Integer durationMs;
+        int bytesPerSample;
+        int blockAlign;
+
+        if ((equipmentId == null) || equipmentId.isBlank() || (timestamp == null) ||
+                (pcmAudio == null) || (pcmAudio.length == 0) || sampleRate <= 0 ||
+                bitsPerSample <= 0 || (bitsPerSample % 8) != 0 || channelCount <= 0) {
+            log.warn("Invalid PCM audio attach payload. equipmentId={}, timestamp={}, sampleRate={}, bitsPerSample={}, channelCount={}, payloadLength={}",
+                    equipmentId,
+                    timestamp,
+                    sampleRate,
+                    bitsPerSample,
+                    channelCount,
+                    pcmAudio == null ? 0 : pcmAudio.length);
+            return false;
+        }
+
+        bytesPerSample = bitsPerSample / 8;
+        blockAlign = bytesPerSample * channelCount;
+        if ((pcmAudio.length % blockAlign) != 0) {
+            log.warn("Unaligned PCM audio attach payload. equipmentId={}, timestamp={}, blockAlign={}, payloadLength={}",
+                    equipmentId, timestamp, blockAlign, pcmAudio.length);
+            return false;
+        }
+
+        resolvedSampleCount = (sampleCount != null && sampleCount > 0)
+                ? sampleCount
+                : pcmAudio.length / blockAlign;
+        durationMs = (int) (((long) resolvedSampleCount * 1000L) / sampleRate);
+
+        log.info("Processing PCM audio attach. equipmentId={}, timestamp={}, sampleRate={}, bitsPerSample={}, channelCount={}, sampleCount={}, durationMs={}, payloadLength={}",
+                equipmentId,
+                timestamp,
+                sampleRate,
+                bitsPerSample,
+                channelCount,
+                resolvedSampleCount,
+                durationMs,
+                pcmAudio.length);
+
+        audioUrl = audioStorageService.storePcmAudioAsWav(pcmAudio,
+                sampleRate,
+                bitsPerSample,
+                channelCount,
+                resolvedSampleCount,
+                equipmentId,
+                timestamp);
+        if ((audioUrl == null) || audioUrl.isBlank()) {
+            log.warn("Failed to store meow audio. equipmentId={}, timestamp={}", equipmentId, timestamp);
+            return false;
+        }
+
+        return attachStoredAudioToMeow(equipmentId,
+                timestamp,
+                audioUrl,
+                durationMs,
+                sampleRate,
+                resolvedSampleCount);
+    }
+
     private boolean attachStoredImageToMeow(String equipmentId, Long timestamp, String imageUrl) {
         Meow meow;
 
@@ -187,6 +261,39 @@ public class MeowServiceImpl implements MeowService {
         }
 
         meow.setImageUrl(imageUrl);
+        mongoTemplate.save(meow);
+        messagingTemplate.convertAndSend("/topic/logs", meow);
+        return true;
+    }
+
+    private boolean attachStoredAudioToMeow(String equipmentId,
+                                            Long timestamp,
+                                            String audioUrl,
+                                            Integer audioDurationMs,
+                                            Integer audioSampleRate,
+                                            Integer audioSampleCount) {
+        Meow meow;
+
+        meow = findMeowForImageAttach(equipmentId, timestamp);
+        if (meow == null) {
+            meow = findLatestMeowForEquipment(equipmentId, timestamp);
+            if (meow != null) {
+                log.warn("Falling back to latest meow record for delayed audio attach. equipmentId={}, timestamp={}, meowId={}",
+                        equipmentId, timestamp, meow.getId());
+            }
+        }
+        if (meow == null) {
+            meow = new Meow();
+            meow.setEquipmentId(equipmentId);
+            meow.setCreateTime(new Date(timestamp));
+            log.warn("Creating placeholder meow record for delayed audio attach. equipmentId={}, timestamp={}",
+                    equipmentId, timestamp);
+        }
+
+        meow.setAudioUrl(audioUrl);
+        meow.setAudioDurationMs(audioDurationMs);
+        meow.setAudioSampleRate(audioSampleRate);
+        meow.setAudioSampleCount(audioSampleCount);
         mongoTemplate.save(meow);
         messagingTemplate.convertAndSend("/topic/logs", meow);
         return true;

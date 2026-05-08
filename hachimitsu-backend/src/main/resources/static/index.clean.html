@@ -170,7 +170,7 @@
         }
 
         .table-wrap { overflow: auto; border-top: 1px solid #eef2f6; }
-        table { width: 100%; border-collapse: collapse; min-width: 980px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1080px; }
         th, td { padding: 14px 18px; border-bottom: 1px solid #eef2f6; text-align: left; font-size: 14px; }
         th {
             background: #f8fafc;
@@ -191,6 +191,12 @@
         }
 
         .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        .audio-link {
+            color: #0f766e;
+            font-weight: 700;
+            text-decoration: none;
+        }
 
         .badge {
             display: inline-flex;
@@ -343,12 +349,13 @@
                         <th>Confidence</th>
                         <th>Time</th>
                         <th>Capture</th>
+                        <th>Audio</th>
                         <th>Status</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr v-if="!logs.length">
-                        <td colspan="7" class="small">No records yet.</td>
+                        <td colspan="8" class="small">No records yet.</td>
                     </tr>
                     <tr v-for="log in logs" :key="log.id">
                         <td>{{ log.id || "--" }}</td>
@@ -361,6 +368,12 @@
                                 <img :src="log.imageUrl" alt="capture thumbnail">
                             </div>
                             <span v-else class="small">No image</span>
+                        </td>
+                        <td>
+                            <a v-if="log.audioUrl" class="audio-link" :href="log.audioUrl" target="_blank" rel="noopener">
+                                {{ log.audioDurationMs ? (log.audioDurationMs / 1000).toFixed(2) + "s" : "WAV" }}
+                            </a>
+                            <span v-else class="small">No audio</span>
                         </td>
                         <td>
                             <span class="badge" :class="log.isCat ? 'meow' : 'waiting'">
@@ -473,6 +486,8 @@
                     confidence: formatNumber(confidence),
                     confidenceValue: confidence,
                     imageUrl: normalizeImageUrl(raw.imageUrl),
+                    audioUrl: normalizeImageUrl(raw.audioUrl),
+                    audioDurationMs: Number.isFinite(Number(raw.audioDurationMs)) ? Number(raw.audioDurationMs) : null,
                     time: formatDate(time),
                     isCat: raw.isCat !== undefined ? !!raw.isCat : confidence >= 0.8
                 };

@@ -22,5 +22,9 @@ public class Meow {
     private Double longitude;
     private Double confidence;
     private String imageUrl;
+    private String audioUrl;
+    private Integer audioDurationMs;
+    private Integer audioSampleRate;
+    private Integer audioSampleCount;
     private Date createTime;
 }

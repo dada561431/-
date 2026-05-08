@@ -21,15 +21,20 @@
 #define MEOW_ADD "/meow/add"
 #define MEOW_ATTACH_IMAGE "/meow/attach-image"
 #define MEOW_ATTACH_YUYV "/meow/attach-yuyv"
+#define MEOW_ATTACH_AUDIO "/meow/attach-audio"
 #define RTC_SYNC_PATH "/rtc/get"
 #define MEOW_ADD_JSON_BUFFER_SIZE (512U)
 #define ATTACH_IMAGE_JSON_BUFFER_SIZE (65536U)
 #define ATTACH_YUYV_PATH_BUFFER_SIZE (256U)
+#define ATTACH_AUDIO_PATH_BUFFER_SIZE (256U)
 
 static char meow_add_json_buffer[MEOW_ADD_JSON_BUFFER_SIZE];
 CY_SECTION(".cy_gpu_buf")
 static char attach_image_json_buffer[ATTACH_IMAGE_JSON_BUFFER_SIZE];
 static char attach_yuyv_path_buffer[ATTACH_YUYV_PATH_BUFFER_SIZE];
+static char attach_audio_path_buffer[ATTACH_AUDIO_PATH_BUFFER_SIZE];
+CY_SECTION(".cy_gpu_buf")
+static ipc_msg_t current_hachimitsu_msg;
 
 static bool build_meow_add_json(const AddMeowDto *dto,
                                 char *buffer,
@@ -37,6 +42,9 @@ static bool build_meow_add_json(const AddMeowDto *dto,
 static bool build_attach_image_json(const AttachMeowImageDto *dto,
                                     char *buffer,
                                     size_t buffer_size);
+static void send_hachimitsu_audio(const ipc_msg_t *msg,
+                                  const char *equipment_id,
+                                  int64_t timestamp);
 static void send_hachimitsu_image(const ipc_msg_t *msg,
                                   const char *equipment_id,
                                   int64_t timestamp);
@@ -46,9 +54,9 @@ static bool format_int64_decimal(int64_t value,
 
 void send_hachimitsu_log(void)
 {
-    ipc_msg_t *msg = NULL;
+    ipc_msg_t *msg = &current_hachimitsu_msg;
 
-    while (get_msg(&msg))
+    while (get_msg(msg))
     {
         cy_stc_rtc_config_t curr_date_time;
         int64_t timestamp = 0;
@@ -74,8 +82,6 @@ void send_hachimitsu_log(void)
                 printf("[HTTP Task] Requeue failed, dropping hachimitsu event\n");
             }
 
-            free(msg);
-            msg = NULL;
             break;
         }
 
@@ -90,15 +96,12 @@ void send_hachimitsu_log(void)
                 printf("[HTTP Task] Requeue failed, dropping hachimitsu event\n");
             }
 
-            free(msg);
-            msg = NULL;
             break;
         }
 
         printf("[HTTP Task] Meow upload completed\n");
+        send_hachimitsu_audio(msg, addMeowDto.equipmentId, addMeowDto.timestamp);
         send_hachimitsu_image(msg, addMeowDto.equipmentId, addMeowDto.timestamp);
-        free(msg);
-        msg = NULL;
     }
 }
 
@@ -129,6 +132,72 @@ static bool build_meow_add_json(const AddMeowDto *dto,
                        timestamp_buffer);
 
     return (written >= 0) && ((size_t)written < buffer_size);
+}
+
+static void send_hachimitsu_audio(const ipc_msg_t *msg,
+                                  const char *equipment_id,
+                                  int64_t timestamp)
+{
+    cy_http_client_response_t response;
+    uint32_t sample_count;
+    uint32_t payload_len;
+    char timestamp_buffer[24];
+    int path_len;
+
+    if ((msg == NULL) || (equipment_id == NULL))
+    {
+        return;
+    }
+
+    sample_count = msg->audio_sample_count;
+    if ((sample_count == 0U) || (sample_count > IPC_MSG_AUDIO_SAMPLE_COUNT))
+    {
+        printf("[HTTP Task] No analysis audio available for upload\n");
+        return;
+    }
+
+    payload_len = sample_count * sizeof(msg->audio_samples[0]);
+    if (!format_int64_decimal(timestamp, timestamp_buffer, sizeof(timestamp_buffer)))
+    {
+        printf("[HTTP Task] Failed to format audio attach timestamp\n");
+        return;
+    }
+
+    path_len = snprintf(attach_audio_path_buffer,
+                        sizeof(attach_audio_path_buffer),
+                        "%s?equipmentId=%s&timestamp=%s&sampleRate=%lu&bitsPerSample=%u&channelCount=%u&sampleCount=%lu&format=PCM_S16LE",
+                        MEOW_ATTACH_AUDIO,
+                        equipment_id,
+                        timestamp_buffer,
+                        (unsigned long)msg->audio_sample_rate,
+                        (unsigned)msg->audio_bits_per_sample,
+                        (unsigned)msg->audio_channel_count,
+                        (unsigned long)sample_count);
+
+    if ((path_len < 0) || ((size_t)path_len >= sizeof(attach_audio_path_buffer)))
+    {
+        printf("[HTTP Task] Audio upload path is too long\n");
+        return;
+    }
+
+    printf("[HTTP Task] Analysis audio upload length=%lu samples=%lu duration=%lums\n",
+           (unsigned long)payload_len,
+           (unsigned long)sample_count,
+           (unsigned long)msg->audio_duration_ms);
+
+    if (fetch_https_client_binary_method(CY_HTTP_CLIENT_METHOD_POST,
+                                         attach_audio_path_buffer,
+                                         "application/octet-stream",
+                                         (const uint8_t *)msg->audio_samples,
+                                         payload_len,
+                                         &response) != CY_RSLT_SUCCESS)
+    {
+        printf("[HTTP Task] Analysis audio upload failed\n");
+    }
+    else
+    {
+        printf("[HTTP Task] Analysis audio upload completed\n");
+    }
 }
 
 static void send_hachimitsu_image(const ipc_msg_t *msg,

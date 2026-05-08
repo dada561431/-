@@ -21,6 +21,8 @@ public class MeowLogsVO {
     private Double lng;
     private Double confidence;
     private String imageUrl;
+    private String audioUrl;
+    private Integer audioDurationMs;
     private String time;
     private Boolean isCat;
 }
