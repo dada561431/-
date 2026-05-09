@@ -17,7 +17,7 @@
 #define STEP_SIZE_SEC           (STEP_SIZE_MS / 1000.0f)          // 姝ラ暱
 #define OUTPUT_THRESHOLD_SCORE  0.6f            // 鐚彨闃堝€?
 #define WINDOW_SIZE             (WINDOW_SIZE_MS / 1000.0f)          // 绐楀彛澶у皬
-#define DETECTION_REPORT_COOLDOWN_SEC 1.0f      // 杩炵画鍛戒腑鏃剁殑涓婃姤鍐峰嵈鏃堕棿
+#define DETECTION_REPORT_COOLDOWN_SEC 5.0f      // 杩炵画鍛戒腑鏃剁殑涓婃姤鍐峰嵈鏃堕棿
 #define IMAGE_CAPTURE_COOLDOWN_SEC 15.0f        // 楂樺儚绱犲浘鐗囪姹傚崟鐙檺棰?
  
 // #define WINDOW_SIZE_SAMPLES     ((int)(SAMPLE_RATE * WINDOW_SIZE))
