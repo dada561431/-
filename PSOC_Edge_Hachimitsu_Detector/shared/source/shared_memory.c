@@ -2,13 +2,22 @@
  * shared_memory.c
  */
 #include "shared_memory.h"
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <cybsp.h>
 
-#define SHARED_MEM_DATA_ADDR     (CYMEM_CM33_0_m55_allocatable_shared_START + CYMEM_CM33_0_m55_allocatable_shared_SIZE - (sizeof(shared_mem_t)))
+#if defined(CYMEM_CM33_0_m33_m55_shared_START) && defined(CYMEM_CM33_0_m33_m55_shared_SIZE)
+#define SHARED_MEM_REGION_START  (CYMEM_CM33_0_m33_m55_shared_START)
+#define SHARED_MEM_REGION_SIZE   (CYMEM_CM33_0_m33_m55_shared_SIZE)
+#elif defined(CYMEM_CM55_0_m33_m55_shared_START) && defined(CYMEM_CM55_0_m33_m55_shared_SIZE)
+#define SHARED_MEM_REGION_START  (CYMEM_CM55_0_m33_m55_shared_START)
+#define SHARED_MEM_REGION_SIZE   (CYMEM_CM55_0_m33_m55_shared_SIZE)
+#else
+#define SHARED_MEM_REGION_START  (CYMEM_CM33_0_m55_allocatable_shared_START)
+#define SHARED_MEM_REGION_SIZE   (CYMEM_CM33_0_m55_allocatable_shared_SIZE)
+#endif
 
 typedef struct {
     volatile uint32_t write_index;
@@ -25,12 +34,25 @@ static uint32_t next_index(uint32_t index)
 
 void shared_mem_init(void)
 {
-    shared_mem_p = (shared_mem_t *) SHARED_MEM_DATA_ADDR;
+    if (sizeof(shared_mem_t) > SHARED_MEM_REGION_SIZE)
+    {
+        shared_mem_p = NULL;
+        printf("shared_mem_t too large: %" PRIu32 " > %" PRIu32 "\n",
+               (uint32_t)sizeof(shared_mem_t),
+               (uint32_t)SHARED_MEM_REGION_SIZE);
+        return;
+    }
+
+    shared_mem_p = (shared_mem_t *)((uintptr_t)SHARED_MEM_REGION_START +
+                                    (uintptr_t)SHARED_MEM_REGION_SIZE -
+                                    sizeof(shared_mem_t));
     memset(shared_mem_p, 0, sizeof(shared_mem_t));
-    printf("init_shared_addr_at: %p\n", (void *) shared_mem_p);
+    printf("init_shared_addr_at: %p, bytes=%" PRIu32 "\n",
+           (void *) shared_mem_p,
+           (uint32_t)sizeof(shared_mem_t));
 }
 
-bool get_msg(ipc_msg_t **msg)
+bool get_msg(ipc_msg_t *msg)
 {
     uint32_t read_index;
     uint32_t write_index;
@@ -47,20 +69,14 @@ bool get_msg(ipc_msg_t **msg)
         return false;
     }
 
-    *msg = (ipc_msg_t *) malloc(sizeof(ipc_msg_t));
-    if (*msg == NULL)
-    {
-        return false;
-    }
-
     __DMB();
-    **msg = shared_mem_p->queue[read_index];
+    *msg = shared_mem_p->queue[read_index];
     __DMB();
     shared_mem_p->read_index = next_index(read_index);
     return true;
 }
 
-bool write_msg(ipc_msg_t *msg)
+bool write_msg(const ipc_msg_t *msg)
 {
     uint32_t write_index;
     uint32_t next_write_index;

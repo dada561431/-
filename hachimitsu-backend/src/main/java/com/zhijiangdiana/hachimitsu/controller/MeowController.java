@@ -53,4 +53,29 @@ public class MeowController {
         }
         return ResponseResult.errorResult(500, "raw image attach failed");
     }
+
+    @PostMapping(value = "/attach-audio", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseResult attachAudio(@RequestParam String equipmentId,
+                                      @RequestParam Long timestamp,
+                                      @RequestParam Integer sampleRate,
+                                      @RequestParam(defaultValue = "16") Integer bitsPerSample,
+                                      @RequestParam(defaultValue = "1") Integer channelCount,
+                                      @RequestParam(required = false) Integer sampleCount,
+                                      @RequestParam(defaultValue = "PCM_S16LE") String format,
+                                      @RequestBody byte[] audioBytes) {
+        if (!"PCM_S16LE".equalsIgnoreCase(format)) {
+            return ResponseResult.errorResult(400, "unsupported audio format");
+        }
+
+        if (meowService.attachPcmAudio(equipmentId,
+                timestamp,
+                audioBytes,
+                sampleRate,
+                bitsPerSample,
+                channelCount,
+                sampleCount)) {
+            return ResponseResult.okResult();
+        }
+        return ResponseResult.errorResult(500, "audio attach failed");
+    }
 }

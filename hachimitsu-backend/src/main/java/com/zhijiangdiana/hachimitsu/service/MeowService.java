@@ -20,4 +20,12 @@ public interface MeowService {
                                int width,
                                int height,
                                Integer sourceStride);
+
+    boolean attachPcmAudio(String equipmentId,
+                           Long timestamp,
+                           byte[] pcmAudio,
+                           int sampleRate,
+                           int bitsPerSample,
+                           int channelCount,
+                           Integer sampleCount);
 }

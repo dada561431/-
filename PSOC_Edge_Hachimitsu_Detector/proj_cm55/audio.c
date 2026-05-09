@@ -49,6 +49,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 // #include "ipc_communication.h"
 // #include "ipc_pipe.h"
 #include "shared_memory.h"
@@ -127,6 +128,44 @@ static int window_filled = 0;                   // Number of valid samples in th
 static uint32_t report_cooldown_windows_remaining = 0;
 static uint32_t image_capture_cooldown_windows_remaining = 0;
 static uint32_t throttled_detection_counter = 0;
+static ipc_msg_t detection_msg;
+
+static void fill_ipc_audio_payload(ipc_msg_t *msg)
+{
+    uint32_t sample_count = (uint32_t)WINDOW_SIZE_SAMPLES;
+
+    if (msg == NULL)
+    {
+        return;
+    }
+
+    if (sample_count > IPC_MSG_AUDIO_SAMPLE_COUNT)
+    {
+        sample_count = IPC_MSG_AUDIO_SAMPLE_COUNT;
+    }
+
+    msg->audio_sample_count = sample_count;
+    msg->audio_sample_rate = IPC_AUDIO_SAMPLE_RATE;
+    msg->audio_duration_ms = (sample_count * 1000U) / IPC_AUDIO_SAMPLE_RATE;
+    msg->audio_bits_per_sample = IPC_AUDIO_BITS_PER_SAMPLE;
+    msg->audio_channel_count = IPC_AUDIO_CHANNEL_COUNT;
+
+    for (uint32_t i = 0; i < sample_count; i++)
+    {
+        float sample = audio_window[i];
+
+        if (sample > 32767.0f)
+        {
+            sample = 32767.0f;
+        }
+        else if (sample < -32768.0f)
+        {
+            sample = -32768.0f;
+        }
+
+        msg->audio_samples[i] = (int16_t)sample;
+    }
+}
 
 cy_rslt_t pdm_init(void)
 {
@@ -312,10 +351,8 @@ cy_rslt_t pdm_data_process(void)
 
     for (int i = 0; i < WINDOW_SIZE_SAMPLES; i++)
     {
-        audio_window[i] /= max_val;
+        model_input[i] = audio_window[i] / max_val;
     }
-
-    memcpy(model_input, audio_window, WINDOW_SIZE_SAMPLES * sizeof(float));
     for (int i = WINDOW_SIZE_SAMPLES; i < MODEL_INPUT_LEN; i++)
     {
         model_input[i] = 0.0f;
@@ -348,18 +385,20 @@ cy_rslt_t pdm_data_process(void)
         }
         else
         {
-            ipc_msg_t msg = {0};
+            ipc_msg_t *msg = &detection_msg;
 
-            msg.confidence = confidence;
-            msg.timestamp = 0;
-            msg.request_snapshot = (image_capture_cooldown_windows_remaining == 0u) ? 1U : 0U;
+            memset(msg, 0, sizeof(*msg));
+            msg->confidence = confidence;
+            msg->timestamp = 0;
+            msg->request_snapshot = (image_capture_cooldown_windows_remaining == 0u) ? 1U : 0U;
+            fill_ipc_audio_payload(msg);
 
             printf("[Hachimitsu Detector] Detected hachimitsu voice, confidence=%.2f\n", confidence);
-            if (!write_msg(&msg))
+            if (!write_msg(msg))
             {
                 printf("[Hachimitsu Detector] Msg queued failed, CM33 sender is busy.\n");
             }
-            else if (msg.request_snapshot != 0U)
+            else if (msg->request_snapshot != 0U)
             {
                 image_capture_cooldown_windows_remaining = IMAGE_CAPTURE_COOLDOWN_WINDOWS;
             }

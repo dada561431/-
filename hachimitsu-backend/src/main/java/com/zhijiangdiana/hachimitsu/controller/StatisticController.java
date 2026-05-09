@@ -182,6 +182,8 @@ public class StatisticController {
                     .lng(log.getLongitude())
                     .confidence(log.getConfidence())
                     .imageUrl(log.getImageUrl())
+                    .audioUrl(log.getAudioUrl())
+                    .audioDurationMs(log.getAudioDurationMs())
                     .time(log.getCreateTime()
                             .toInstant()
                             .atZone(zoneId)
