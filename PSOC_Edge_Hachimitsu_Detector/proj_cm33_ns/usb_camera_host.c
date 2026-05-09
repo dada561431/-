@@ -881,7 +881,9 @@ static void usb_camera_handle_device(U8 dev_index)
         if ((!snapshot_request_pending) &&
             ((int32_t)(xTaskGetTickCount() - usb_camera_stream_keepalive_deadline) >= 0))
         {
-            break;
+            usb_camera_stream_keepalive_deadline =
+                xTaskGetTickCount() + pdMS_TO_TICKS(USB_CAMERA_STREAM_KEEPALIVE_MS);
+            continue;
         }
     }
 
