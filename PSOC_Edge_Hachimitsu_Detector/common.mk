@@ -69,5 +69,15 @@ COMBINE_SIGN_JSON?=configs/boot_with_extended_boot.json
 # cm55
 ML_DEEPCRAFT_CPU=cm55
 
+############################# Display module ###################################
+# Select the LCD module used by the CM55 LVGL graphics task.
+#
+# WF101JTYAHMNB0_DISP - 10.1 inch 1024x600 TFT DSI LCD with ILI2511 touch.
+# WS7P0DSI_RPI_DISP  - Waveshare 7 inch Raspberry Pi DSI LCD (C) 1024x600.
+# W4P3INCH_DISP      - Waveshare 4.3 inch Raspberry Pi DSI LCD 800x480.
+CONFIG_DISPLAY ?= W4P3INCH_DISP
+
+COMPONENTS+=GFXSS
+
 
 include ../common_app.mk

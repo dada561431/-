@@ -120,6 +120,7 @@ static void app_sdio_init(void)
         .intrPriority = APP_HOST_WAKE_INTERRUPT_PRIORITY
     };
 
+    printf("[WIFI] SDIO_INIT_BEGIN\n");
     cy_en_sysint_status_t interrupt_init_status = Cy_SysInt_Init(&sdio_intr_cfg,
                                                                  sdio_interrupt_handler);
     if (CY_SYSINT_SUCCESS != interrupt_init_status)
@@ -127,6 +128,7 @@ static void app_sdio_init(void)
         handle_app_error();
     }
     NVIC_EnableIRQ(CYBSP_WIFI_SDIO_IRQ);
+    printf("[WIFI] SDIO_IRQ_READY\n");
 
     result = mtb_hal_sdio_setup(&sdio_instance,
                                 &CYBSP_WIFI_SDIO_sdio_hal_config,
@@ -136,6 +138,7 @@ static void app_sdio_init(void)
     {
         handle_app_error();
     }
+    printf("[WIFI] SDIO_HAL_READY\n");
 
     Cy_SD_Host_Enable(CYBSP_WIFI_SDIO_HW);
     Cy_SD_Host_Init(CYBSP_WIFI_SDIO_HW,
@@ -145,6 +148,7 @@ static void app_sdio_init(void)
     sdio_hal_cfg.frequencyhal_hz = APP_SDIO_FREQUENCY_HZ;
     sdio_hal_cfg.block_size = SDHC_SDIO_64BYTES_BLOCK;
     mtb_hal_sdio_configure(&sdio_instance, &sdio_hal_cfg);
+    printf("[WIFI] SDIO_HOST_READY\n");
 
     mtb_hal_gpio_setup(&wcm_config.wifi_wl_pin,
                        CYBSP_WIFI_WL_REG_ON_PORT_NUM,
@@ -152,6 +156,7 @@ static void app_sdio_init(void)
     mtb_hal_gpio_setup(&wcm_config.wifi_host_wake_pin,
                        CYBSP_WIFI_HOST_WAKE_PORT_NUM,
                        CYBSP_WIFI_HOST_WAKE_PIN);
+    printf("[WIFI] SDIO_GPIO_READY\n");
 
     cy_en_sysint_status_t interrupt_init_status_host_wake =
         Cy_SysInt_Init(&host_wake_intr_cfg, host_wake_interrupt_handler);
@@ -160,6 +165,7 @@ static void app_sdio_init(void)
         handle_app_error();
     }
     NVIC_EnableIRQ(CYBSP_WIFI_HOST_WAKE_IRQ);
+    printf("[WIFI] SDIO_INIT_DONE\n");
 }
 
 static void print_ip_address(const cy_wcm_ip_address_t *address)
@@ -268,7 +274,9 @@ static cy_rslt_t wifi_connect(void)
         wcm_config.interface = CY_WCM_INTERFACE_TYPE_STA;
         wcm_config.wifi_interface_instance = &sdio_instance;
 
+        printf("[WIFI] WCM_INIT_BEGIN\n");
         result = cy_wcm_init(&wcm_config);
+        printf("[WIFI] WCM_INIT_DONE status=0x%08lX\n", (unsigned long)result);
         if (CY_RSLT_SUCCESS != result)
         {
             printf("[HTTP_TASK] Wi-Fi Connection Manager initialization failed!\n");
