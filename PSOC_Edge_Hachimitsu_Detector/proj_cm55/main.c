@@ -50,6 +50,7 @@
 #include "cy_time.h"
 
 #include "lvgl.h"
+#include <stdio.h>
 
 #if defined(MTB_DISPLAY_WS7P0DSI_RPI)
 #include "mtb_disp_ws7p0dsi_drv.h"
@@ -86,6 +87,7 @@
 #define DISPLAY_STABILIZATION_DELAY_MS      (1000U)
 #define DISPLAY_INIT_RETRY_COUNT            (3U)
 #define DISPLAY_INIT_RETRY_DELAY_MS         (500U)
+#define STATUS_TIMER_PERIOD_MS              (1000U)
 #define CM55_GFX_START_DELAY_MS             (3000U)
 #define W4P3_DISPLAY_I2C_TARGET_HZ          (100000U)
 
@@ -136,6 +138,8 @@ TaskHandle_t rtos_cm55_gfx_task_handle = NULL;
 TaskHandle_t rtos_cm55_audio_task_handle = NULL;
 static bool gfxss_initialized = false;
 static bool display_i2c_initialized = false;
+static lv_obj_t *status_body_label = NULL;
+static uint32_t status_elapsed_seconds = 0U;
 
 /* DC IRQ Config */
 cy_stc_sysint_t dc_irq_cfg =
@@ -175,6 +179,26 @@ static void start_audio_task(void);
 static void configure_display_i2c_clock(void);
 static void suspend_gfx_task_after_failure(const char *reason);
 
+static void update_hachimitsu_status_text(void)
+{
+    if (status_body_label != NULL)
+    {
+        lv_label_set_text_fmt(status_body_label,
+                              "LVGL running on CM55\n"
+                              "Audio detector active\n"
+                              "Uptime: %lu s",
+                              (unsigned long)status_elapsed_seconds);
+    }
+}
+
+static void hachimitsu_status_timer_cb(lv_timer_t *timer)
+{
+    CY_UNUSED_PARAMETER(timer);
+
+    status_elapsed_seconds++;
+    update_hachimitsu_status_text();
+}
+
 /*******************************************************************************
 * Function Name: create_hachimitsu_status_screen
 ********************************************************************************
@@ -195,12 +219,15 @@ static void create_hachimitsu_status_screen(void)
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, LV_PART_MAIN);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, -42);
 
-    lv_obj_t *body = lv_label_create(scr);
-    lv_label_set_text(body, "LVGL running on CM55\nAudio detector active");
-    lv_obj_set_style_text_color(body, lv_color_hex(0xE8EEF2), LV_PART_MAIN);
-    lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_font(body, &lv_font_montserrat_16, LV_PART_MAIN);
-    lv_obj_align(body, LV_ALIGN_CENTER, 0, 16);
+    status_body_label = lv_label_create(scr);
+    status_elapsed_seconds = 0U;
+    update_hachimitsu_status_text();
+    lv_obj_set_style_text_color(status_body_label, lv_color_hex(0xE8EEF2), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_body_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_body_label, &lv_font_montserrat_16, LV_PART_MAIN);
+    lv_obj_align(status_body_label, LV_ALIGN_CENTER, 0, 24);
+
+    //(void)lv_timer_create(hachimitsu_status_timer_cb,STATUS_TIMER_PERIOD_MS,NULL);
 }
 
 /*******************************************************************************

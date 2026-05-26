@@ -54,8 +54,8 @@
 /* Wi-Fi Credentials: Modify WIFI_SSID and WIFI_PASSWORD to match your Wi-Fi
  * network Credentials.
  */
-#define WIFI_SSID                                "301"
-#define WIFI_PASSWORD                            "1234554321"
+#define WIFI_SSID                                "wzh"
+#define WIFI_PASSWORD                            "001234567"
 
 /* Security type of the Wi-Fi access point. See 'cy_wcm_security_t' structure
  * in "cy_wcm.h" for more details.
@@ -74,7 +74,7 @@
                                          }                              \
                                      } while(0);
 #define HTTPS_PORT                               8080
-#define HTTPS_SERVER_HOST                        "192.168.3.32"
+#define HTTPS_SERVER_HOST                        "192.168.118.186"
 #define TRANSPORT_SEND_RECV_TIMEOUT_MS           (10000U)
 #define HTTP_GET_BUFFER_LENGTH                   (2048U)
 
