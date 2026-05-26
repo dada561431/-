@@ -5,11 +5,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d6d386fe-8ed2-4454-9b39-a3592e9f7ccb" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/common.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/common.mk" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm33_ns/secure_http_client.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/deps/assetlocks.json" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/deps/assetlocks.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/proj_cm55/main.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -50,7 +45,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;Spring Boot.HachimitsuApplication.executor&quot;: &quot;Run&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;wtx519&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;E:/project/qianrushi/-/hachimitsu-backend&quot;,
@@ -99,6 +94,9 @@
       <workItem from="1776135997753" duration="2612000" />
       <workItem from="1777084287853" duration="8365000" />
       <workItem from="1777182450685" duration="3765000" />
+      <workItem from="1779169368926" duration="1000" />
+      <workItem from="1779194995775" duration="8000" />
+      <workItem from="1779762614530" duration="1238000" />
     </task>
     <servers />
   </component>
