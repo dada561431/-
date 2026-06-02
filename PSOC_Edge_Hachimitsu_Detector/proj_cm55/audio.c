@@ -128,6 +128,7 @@ static int window_filled = 0;                   // Number of valid samples in th
 static uint32_t report_cooldown_windows_remaining = 0;
 static uint32_t image_capture_cooldown_windows_remaining = 0;
 static uint32_t throttled_detection_counter = 0;
+static volatile uint32_t high_confidence_upload_count = 0U;
 static ipc_msg_t detection_msg;
 
 static void fill_ipc_audio_payload(ipc_msg_t *msg)
@@ -181,6 +182,7 @@ cy_rslt_t pdm_init(void)
     report_cooldown_windows_remaining = 0;
     image_capture_cooldown_windows_remaining = 0;
     throttled_detection_counter = 0;
+    high_confidence_upload_count = 0U;
     memset(audio_window, 0, sizeof(audio_window));
 
     /* 鍒濆鍖?PDM PCM 纭欢 */
@@ -398,9 +400,13 @@ cy_rslt_t pdm_data_process(void)
             {
                 printf("[Hachimitsu Detector] Msg queued failed, CM33 sender is busy.\n");
             }
-            else if (msg->request_snapshot != 0U)
+            else
             {
-                image_capture_cooldown_windows_remaining = IMAGE_CAPTURE_COOLDOWN_WINDOWS;
+                high_confidence_upload_count++;
+                if (msg->request_snapshot != 0U)
+                {
+                    image_capture_cooldown_windows_remaining = IMAGE_CAPTURE_COOLDOWN_WINDOWS;
+                }
             }
 
             report_cooldown_windows_remaining = DETECTION_REPORT_COOLDOWN_WINDOWS;
@@ -414,6 +420,11 @@ cy_rslt_t pdm_data_process(void)
     }
 
     return CY_RSLT_SUCCESS;
+}
+
+uint32_t audio_get_high_confidence_upload_count(void)
+{
+    return high_confidence_upload_count;
 }
 /* [] END OF FILE */
 

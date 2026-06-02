@@ -78,7 +78,7 @@
 /* stack size in words */
 #define GFX_TASK_STACK_SIZE                 (configMINIMAL_STACK_SIZE * 16)
 
-#define GFX_TASK_PRIORITY                   (configMAX_PRIORITIES - 1)
+#define GFX_TASK_PRIORITY                   (configMAX_PRIORITIES - 3)
 
 #define AUDIO_TASK_NAME                     ("CM55 Audio Task")
 #define AUDIO_TASK_STACK_SIZE               (configMINIMAL_STACK_SIZE * 16)
@@ -138,8 +138,12 @@ TaskHandle_t rtos_cm55_gfx_task_handle = NULL;
 TaskHandle_t rtos_cm55_audio_task_handle = NULL;
 static bool gfxss_initialized = false;
 static bool display_i2c_initialized = false;
-static lv_obj_t *status_body_label = NULL;
-static uint32_t status_elapsed_seconds = 0U;
+static lv_obj_t *status_title_label = NULL;
+static lv_obj_t *status_time_label = NULL;
+static lv_obj_t *status_mowo_label = NULL;
+static uint8_t status_clock_hour = 0U;
+static uint8_t status_clock_min = 0U;
+static uint8_t status_clock_sec = 0U;
 
 /* DC IRQ Config */
 cy_stc_sysint_t dc_irq_cfg =
@@ -181,21 +185,56 @@ static void suspend_gfx_task_after_failure(const char *reason);
 
 static void update_hachimitsu_status_text(void)
 {
-    if (status_body_label != NULL)
+    if (status_title_label != NULL)
     {
-        lv_label_set_text_fmt(status_body_label,
-                              "LVGL running on CM55\n"
-                              "Audio detector active\n"
-                              "Uptime: %lu s",
-                              (unsigned long)status_elapsed_seconds);
     }
+
+    if (status_time_label != NULL)
+    {
+        uint8_t shared_hour;
+        uint8_t shared_min;
+        uint8_t shared_sec;
+
+        if (shared_mem_get_clock(&shared_hour, &shared_min, &shared_sec))
+        {
+            status_clock_hour = shared_hour;
+            status_clock_min = shared_min;
+            status_clock_sec = shared_sec;
+        }
+
+        lv_label_set_text_fmt(status_time_label,
+                              "Time\n%02u:%02u:%02u",
+                              (unsigned int)status_clock_hour,
+                              (unsigned int)status_clock_min,
+                              (unsigned int)status_clock_sec);
+        lv_obj_invalidate(status_time_label);
+    }
+
+    if (status_mowo_label != NULL)
+    {
+        lv_label_set_text_fmt(status_mowo_label,
+                              "MOWO number: %lu\n(confidence>0.95)",
+                              (unsigned long)audio_get_high_confidence_upload_count());
+        lv_obj_invalidate(status_mowo_label);
+    }
+
 }
 
 static void hachimitsu_status_timer_cb(lv_timer_t *timer)
 {
     CY_UNUSED_PARAMETER(timer);
 
-    status_elapsed_seconds++;
+    status_clock_sec++;
+    if (status_clock_sec >= 60U)
+    {
+        status_clock_sec = 0U;
+        status_clock_min++;
+        if (status_clock_min >= 60U)
+        {
+            status_clock_min = 0U;
+            status_clock_hour = (uint8_t)((status_clock_hour + 1U) % 24U);
+        }
+    }
     update_hachimitsu_status_text();
 }
 
@@ -210,24 +249,44 @@ static void hachimitsu_status_timer_cb(lv_timer_t *timer)
 static void create_hachimitsu_status_screen(void)
 {
     lv_obj_t *scr = lv_screen_active();
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x101820), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-    lv_obj_t *title = lv_label_create(scr);
-    lv_label_set_text(title, "Hachimitsu Detector");
-    lv_obj_set_style_text_color(title, lv_color_hex(0xF8E16C), LV_PART_MAIN);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, -42);
+    status_title_label = lv_label_create(scr);
+    lv_obj_set_width(status_title_label, ACTUAL_DISP_HOR_RES);
+    lv_label_set_long_mode(status_title_label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(status_title_label, "Hachimitsu Detector");
+    lv_obj_set_style_text_color(status_title_label, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_title_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_title_label, &lv_font_montserrat_36, LV_PART_MAIN);
+    lv_obj_align(status_title_label, LV_ALIGN_TOP_MID, 0, 28);
 
-    status_body_label = lv_label_create(scr);
-    status_elapsed_seconds = 0U;
+    status_time_label = lv_label_create(scr);
+    lv_obj_set_width(status_time_label, ACTUAL_DISP_HOR_RES / 2U);
+    lv_label_set_long_mode(status_time_label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_color(status_time_label, lv_color_hex(0xEAF4FF), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_time_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_time_label, &lv_font_montserrat_24, LV_PART_MAIN);
+    lv_obj_align(status_time_label, LV_ALIGN_LEFT_MID, 64, 36);
+
+    status_mowo_label = lv_label_create(scr);
+    lv_obj_set_width(status_mowo_label, (ACTUAL_DISP_HOR_RES / 2U) + 120U);
+    lv_label_set_long_mode(status_mowo_label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(status_mowo_label, "MOWO number: 0\n(confidence>0.95)");
+    lv_obj_set_style_text_color(status_mowo_label, lv_color_hex(0xEAF4FF), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_mowo_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_mowo_label, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_align(status_mowo_label, LV_ALIGN_RIGHT_MID, -136, 36);
+
+    status_clock_hour = 0U;
+    status_clock_min = 0U;
+    status_clock_sec = 0U;
     update_hachimitsu_status_text();
-    lv_obj_set_style_text_color(status_body_label, lv_color_hex(0xE8EEF2), LV_PART_MAIN);
-    lv_obj_set_style_text_align(status_body_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_font(status_body_label, &lv_font_montserrat_16, LV_PART_MAIN);
-    lv_obj_align(status_body_label, LV_ALIGN_CENTER, 0, 24);
+    lv_obj_invalidate(scr);
 
-    //(void)lv_timer_create(hachimitsu_status_timer_cb,STATUS_TIMER_PERIOD_MS,NULL);
+    (void)lv_timer_create(hachimitsu_status_timer_cb,
+                          STATUS_TIMER_PERIOD_MS,
+                          NULL);
 }
 
 /*******************************************************************************
@@ -912,6 +971,10 @@ static void cm55_gfx_task(void *arg)
          * LVGL tasks.
          */
         time_till_next = lv_timer_handler();
+        if (time_till_next == 0U)
+        {
+            time_till_next = 1U;
+        }
         vTaskDelay(pdMS_TO_TICKS(time_till_next));
     }
 }

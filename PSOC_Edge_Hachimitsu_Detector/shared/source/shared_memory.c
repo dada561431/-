@@ -20,6 +20,11 @@
 #endif
 
 typedef struct {
+    volatile uint32_t clock_sequence;
+    volatile uint8_t clock_hour;
+    volatile uint8_t clock_min;
+    volatile uint8_t clock_sec;
+    volatile uint8_t clock_valid;
     volatile uint32_t write_index;
     volatile uint32_t read_index;
     ipc_msg_t queue[IPC_MSG_QUEUE_LEN];
@@ -46,10 +51,73 @@ void shared_mem_init(void)
     shared_mem_p = (shared_mem_t *)((uintptr_t)SHARED_MEM_REGION_START +
                                     (uintptr_t)SHARED_MEM_REGION_SIZE -
                                     sizeof(shared_mem_t));
+#if defined(ML_DEEPCRAFT_CM33)
     memset(shared_mem_p, 0, sizeof(shared_mem_t));
+#endif
     printf("init_shared_addr_at: %p, bytes=%" PRIu32 "\n",
            (void *) shared_mem_p,
            (uint32_t)sizeof(shared_mem_t));
+}
+
+void shared_mem_set_clock(uint8_t hour, uint8_t min, uint8_t sec)
+{
+    uint32_t sequence;
+
+    if (shared_mem_p == NULL)
+    {
+        return;
+    }
+
+    sequence = shared_mem_p->clock_sequence + 1U;
+    shared_mem_p->clock_sequence = sequence;
+    __DMB();
+    shared_mem_p->clock_hour = hour;
+    shared_mem_p->clock_min = min;
+    shared_mem_p->clock_sec = sec;
+    shared_mem_p->clock_valid = 1U;
+    __DMB();
+    shared_mem_p->clock_sequence = sequence + 1U;
+}
+
+bool shared_mem_get_clock(uint8_t *hour, uint8_t *min, uint8_t *sec)
+{
+    uint32_t sequence_before;
+    uint32_t sequence_after;
+    uint8_t local_hour;
+    uint8_t local_min;
+    uint8_t local_sec;
+
+    if ((shared_mem_p == NULL) ||
+        (hour == NULL) ||
+        (min == NULL) ||
+        (sec == NULL) ||
+        (shared_mem_p->clock_valid == 0U))
+    {
+        return false;
+    }
+
+    sequence_before = shared_mem_p->clock_sequence;
+    if ((sequence_before & 1U) != 0U)
+    {
+        return false;
+    }
+
+    __DMB();
+    local_hour = shared_mem_p->clock_hour;
+    local_min = shared_mem_p->clock_min;
+    local_sec = shared_mem_p->clock_sec;
+    __DMB();
+    sequence_after = shared_mem_p->clock_sequence;
+
+    if ((sequence_before != sequence_after) || ((sequence_after & 1U) != 0U))
+    {
+        return false;
+    }
+
+    *hour = local_hour;
+    *min = local_min;
+    *sec = local_sec;
+    return true;
 }
 
 bool get_msg(ipc_msg_t *msg)

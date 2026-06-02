@@ -48,18 +48,24 @@
 
 #if LV_COLOR_DEPTH == 16
     #define BYTE_PER_PIXEL (LV_COLOR_FORMAT_GET_SIZE(LV_COLOR_FORMAT_RGB565)) 
+    #define DISP_COLOR_FORMAT (LV_COLOR_FORMAT_RGB565)
 #elif LV_COLOR_DEPTH == 32
     #define BYTE_PER_PIXEL (LV_COLOR_FORMAT_GET_SIZE(LV_COLOR_FORMAT_ARGB8888))
+    #define DISP_COLOR_FORMAT (LV_COLOR_FORMAT_ARGB8888)
 #endif
+
+#define DISP_DRAW_BUFFER_LINES (40U)
 
 
 /*******************************************************************************
 * Global Variables
 *******************************************************************************/
-CY_SECTION(".cy_gpu_buf") LV_ATTRIBUTE_MEM_ALIGN uint8_t disp_buf1[MY_DISP_HOR_RES *
-                                               MY_DISP_VER_RES * BYTE_PER_PIXEL];
+CY_SECTION(".cy_gpu_buf") LV_ATTRIBUTE_MEM_ALIGN uint8_t disp_frame_buf[MY_DISP_HOR_RES *
+                                                  MY_DISP_VER_RES * BYTE_PER_PIXEL];
+CY_SECTION(".cy_gpu_buf") LV_ATTRIBUTE_MEM_ALIGN uint8_t disp_draw_buf[MY_DISP_HOR_RES *
+                                                 DISP_DRAW_BUFFER_LINES * BYTE_PER_PIXEL];
 /* Frame buffers used by GFXSS to render UI */
-void *frame_buffer1 = &disp_buf1;
+void *frame_buffer1 = &disp_frame_buf;
 void *frame_buffer2 = NULL;
 
 cy_stc_gfx_context_t gfx_context;
@@ -86,9 +92,34 @@ static void LV_ATTRIBUTE_FAST_MEM disp_flush(lv_display_t *disp_drv,
                                              const lv_area_t *area,
                                              uint8_t *color_p)
 {
-    CY_UNUSED_PARAMETER(area);
+    int32_t copy_w;
+    int32_t copy_h;
+    uint32_t src_stride;
+    uint32_t dst_stride;
+    uint8_t *dst;
 
-    Cy_GFXSS_Set_FrameBuffer((GFXSS_Type*) GFXSS, (uint32_t*) color_p,
+    copy_w = lv_area_get_width(area);
+    copy_h = lv_area_get_height(area);
+    if ((copy_w <= 0) || (copy_h <= 0))
+    {
+        lv_display_flush_ready(disp_drv);
+        return;
+    }
+
+    src_stride = lv_draw_buf_width_to_stride((uint32_t)copy_w, DISP_COLOR_FORMAT);
+    dst_stride = lv_draw_buf_width_to_stride(MY_DISP_HOR_RES, DISP_COLOR_FORMAT);
+    dst = ((uint8_t *)frame_buffer1) +
+          ((uint32_t)area->y1 * dst_stride) +
+          ((uint32_t)area->x1 * BYTE_PER_PIXEL);
+
+    for (int32_t y = 0; y < copy_h; y++)
+    {
+        memcpy(dst + ((uint32_t)y * dst_stride),
+               color_p + ((uint32_t)y * src_stride),
+               src_stride);
+    }
+
+    Cy_GFXSS_Set_FrameBuffer((GFXSS_Type*) GFXSS, (uint32_t*) frame_buffer1,
             &gfx_context);
 
     if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY))
@@ -136,7 +167,8 @@ static void LV_ATTRIBUTE_FAST_MEM disp_flush(lv_display_t *disp_drv,
 *******************************************************************************/
 void lv_port_disp_init(void)
 {
-    memset(disp_buf1, 0, sizeof(disp_buf1));
+    memset(disp_frame_buf, 0, sizeof(disp_frame_buf));
+    memset(disp_draw_buf, 0, sizeof(disp_draw_buf));
 
     lv_display_t * disp = lv_display_create(MY_DISP_HOR_RES, MY_DISP_VER_RES);
 
@@ -144,8 +176,8 @@ void lv_port_disp_init(void)
 
     lv_tick_set_cb(xTaskGetTickCount);
 
-    lv_display_set_buffers(disp, disp_buf1, NULL, sizeof(disp_buf1),
-                           LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_buffers(disp, disp_draw_buf, NULL, sizeof(disp_draw_buf),
+                           LV_DISPLAY_RENDER_MODE_PARTIAL);
 
     /* Set the display resolution to match the physical resolution so that
      * LVGL renders the UI within the limits of the actual display resolution.

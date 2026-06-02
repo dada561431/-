@@ -9,6 +9,7 @@
 #include "cy_tls.h"
 #include "cy_wcm.h"
 #include "cy_wcm_error.h"
+#include "cy_rtc.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,6 +37,7 @@
 #define APP_SDIO_FREQUENCY_HZ           (25000000U)
 #define SDHC_SDIO_64BYTES_BLOCK         (64U)
 #define INITIAL_VALUE                   (0U)
+#define CLOCK_PUBLISH_PERIOD_MS         (1000U)
 
 static cy_awsport_ssl_credentials_t security_config;
 static cy_awsport_server_info_t server_info;
@@ -94,6 +96,7 @@ static void cleanup_http_client(void);
 static cy_rslt_t ensure_connection_ready(void);
 static void wifi_event_callback(cy_wcm_event_t event, cy_wcm_event_data_t *event_data);
 static void request_reconnect(const char *reason);
+static void publish_rtc_clock_to_cm55(void);
 
 static void sdio_interrupt_handler(void)
 {
@@ -551,6 +554,7 @@ static cy_rslt_t ensure_connection_ready(void)
 void https_client_task(void *arg)
 {
     cy_rslt_t result;
+    TickType_t last_clock_publish_tick = 0U;
     (void)arg;
 
     https_client_task_handle = xTaskGetCurrentTaskHandle();
@@ -559,9 +563,19 @@ void https_client_task(void *arg)
 
     printf("Successfully connected to http server\r\n");
     sync_rtc();
+    publish_rtc_clock_to_cm55();
+    last_clock_publish_tick = xTaskGetTickCount();
 
     while (true)
     {
+        TickType_t now_tick = xTaskGetTickCount();
+
+        if ((now_tick - last_clock_publish_tick) >= pdMS_TO_TICKS(CLOCK_PUBLISH_PERIOD_MS))
+        {
+            publish_rtc_clock_to_cm55();
+            last_clock_publish_tick = now_tick;
+        }
+
         result = ensure_connection_ready();
         if (CY_RSLT_SUCCESS != result)
         {
@@ -573,6 +587,16 @@ void https_client_task(void *arg)
         send_hachimitsu_log();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
     }
+}
+
+static void publish_rtc_clock_to_cm55(void)
+{
+    cy_stc_rtc_config_t curr_date_time;
+
+    Cy_RTC_GetDateAndTime(&curr_date_time);
+    shared_mem_set_clock((uint8_t)curr_date_time.hour,
+                         (uint8_t)curr_date_time.min,
+                         (uint8_t)curr_date_time.sec);
 }
 
 cy_rslt_t fetch_https_client_method(cy_http_client_method_t method, const char *path,

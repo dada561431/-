@@ -30,7 +30,9 @@ typedef struct {
     int16_t     audio_samples[IPC_MSG_AUDIO_SAMPLE_COUNT];
 } ipc_msg_t;
 
-void shared_mem_init();
+void shared_mem_init(void);
+void shared_mem_set_clock(uint8_t hour, uint8_t min, uint8_t sec);
+bool shared_mem_get_clock(uint8_t *hour, uint8_t *min, uint8_t *sec);
 bool get_msg(ipc_msg_t * msg);
 bool write_msg(const ipc_msg_t * msg);
 
