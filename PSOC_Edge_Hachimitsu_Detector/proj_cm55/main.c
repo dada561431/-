@@ -139,11 +139,16 @@ TaskHandle_t rtos_cm55_audio_task_handle = NULL;
 static bool gfxss_initialized = false;
 static bool display_i2c_initialized = false;
 static lv_obj_t *status_title_label = NULL;
+static lv_obj_t *status_date_label = NULL;
 static lv_obj_t *status_time_label = NULL;
-static lv_obj_t *status_mowo_label = NULL;
+static lv_obj_t *status_mowo_count_label = NULL;
+static uint16_t status_clock_year = 0U;
+static uint8_t status_clock_month = 0U;
+static uint8_t status_clock_day = 0U;
 static uint8_t status_clock_hour = 0U;
 static uint8_t status_clock_min = 0U;
 static uint8_t status_clock_sec = 0U;
+static uint32_t status_mowo_last_count = 0xFFFFFFFFUL;
 
 /* DC IRQ Config */
 cy_stc_sysint_t dc_irq_cfg =
@@ -183,41 +188,118 @@ static void start_audio_task(void);
 static void configure_display_i2c_clock(void);
 static void suspend_gfx_task_after_failure(const char *reason);
 
-static void update_hachimitsu_status_text(void)
+static bool status_is_leap_year(uint16_t year)
 {
-    if (status_title_label != NULL)
+    return (((year % 4U) == 0U) &&
+            (((year % 100U) != 0U) || ((year % 400U) == 0U)));
+}
+
+static uint8_t status_days_in_month(uint16_t year, uint8_t month)
+{
+    static const uint8_t days_per_month[] =
     {
+        31U, 28U, 31U, 30U, 31U, 30U,
+        31U, 31U, 30U, 31U, 30U, 31U
+    };
+
+    if ((month < 1U) || (month > 12U))
+    {
+        return 31U;
     }
 
-    if (status_time_label != NULL)
+    if ((month == 2U) && status_is_leap_year(year))
     {
+        return 29U;
+    }
+
+    return days_per_month[month - 1U];
+}
+
+static void status_advance_one_day(void)
+{
+    if ((status_clock_year == 0U) ||
+        (status_clock_month == 0U) ||
+        (status_clock_day == 0U))
+    {
+        return;
+    }
+
+    status_clock_day++;
+    if (status_clock_day > status_days_in_month(status_clock_year,
+                                                status_clock_month))
+    {
+        status_clock_day = 1U;
+        status_clock_month++;
+        if (status_clock_month > 12U)
+        {
+            status_clock_month = 1U;
+            status_clock_year++;
+        }
+    }
+}
+
+static void update_hachimitsu_status_text(void)
+{
+    if ((status_date_label != NULL) || (status_time_label != NULL))
+    {
+        uint16_t shared_year;
+        uint8_t shared_month;
+        uint8_t shared_day;
         uint8_t shared_hour;
         uint8_t shared_min;
         uint8_t shared_sec;
 
-        if (shared_mem_get_clock(&shared_hour, &shared_min, &shared_sec))
+        if (shared_mem_get_datetime(&shared_year, &shared_month, &shared_day,
+                                    &shared_hour, &shared_min, &shared_sec))
         {
+            status_clock_year = shared_year;
+            status_clock_month = shared_month;
+            status_clock_day = shared_day;
             status_clock_hour = shared_hour;
             status_clock_min = shared_min;
             status_clock_sec = shared_sec;
         }
 
-        lv_label_set_text_fmt(status_time_label,
-                              "Time\n%02u:%02u:%02u",
-                              (unsigned int)status_clock_hour,
-                              (unsigned int)status_clock_min,
-                              (unsigned int)status_clock_sec);
-        lv_obj_invalidate(status_time_label);
+        if (status_date_label != NULL)
+        {
+            if ((status_clock_year != 0U) &&
+                (status_clock_month != 0U) &&
+                (status_clock_day != 0U))
+            {
+                lv_label_set_text_fmt(status_date_label,
+                                      "%04u-%02u-%02u",
+                                      (unsigned int)status_clock_year,
+                                      (unsigned int)status_clock_month,
+                                      (unsigned int)status_clock_day);
+            }
+            else
+            {
+                lv_label_set_text(status_date_label, "---- -- --");
+            }
+        }
+
+        if (status_time_label != NULL)
+        {
+            lv_label_set_text_fmt(status_time_label,
+                                  "%02u:%02u:%02u",
+                                  (unsigned int)status_clock_hour,
+                                  (unsigned int)status_clock_min,
+                                  (unsigned int)status_clock_sec);
+        }
     }
 
-    if (status_mowo_label != NULL)
+    if (status_mowo_count_label != NULL)
     {
-        lv_label_set_text_fmt(status_mowo_label,
-                              "MOWO number: %lu\n(confidence>0.95)",
-                              (unsigned long)audio_get_high_confidence_upload_count());
-        lv_obj_invalidate(status_mowo_label);
-    }
+        uint32_t mowo_count = audio_get_high_confidence_upload_count();
 
+        if (mowo_count != status_mowo_last_count)
+        {
+            lv_label_set_text_fmt(status_mowo_count_label,
+                                  "%lu",
+                                  (unsigned long)mowo_count);
+            status_mowo_last_count = mowo_count;
+        }
+    }
 }
 
 static void hachimitsu_status_timer_cb(lv_timer_t *timer)
@@ -233,6 +315,10 @@ static void hachimitsu_status_timer_cb(lv_timer_t *timer)
         {
             status_clock_min = 0U;
             status_clock_hour = (uint8_t)((status_clock_hour + 1U) % 24U);
+            if (status_clock_hour == 0U)
+            {
+                status_advance_one_day();
+            }
         }
     }
     update_hachimitsu_status_text();
@@ -249,8 +335,19 @@ static void hachimitsu_status_timer_cb(lv_timer_t *timer)
 static void create_hachimitsu_status_screen(void)
 {
     lv_obj_t *scr = lv_screen_active();
+    lv_obj_t *accent_line;
+    lv_obj_t *time_panel;
+    lv_obj_t *mowo_panel;
+    lv_obj_t *time_accent;
+    lv_obj_t *mowo_accent;
+    lv_obj_t *time_caption;
+    lv_obj_t *mowo_caption;
+    lv_obj_t *mowo_name_label;
+    lv_obj_t *confidence_label;
+
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
     status_title_label = lv_label_create(scr);
     lv_obj_set_width(status_title_label, ACTUAL_DISP_HOR_RES);
@@ -259,28 +356,121 @@ static void create_hachimitsu_status_screen(void)
     lv_obj_set_style_text_color(status_title_label, lv_color_hex(0xF8E16C), LV_PART_MAIN);
     lv_obj_set_style_text_align(status_title_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_font(status_title_label, &lv_font_montserrat_36, LV_PART_MAIN);
-    lv_obj_align(status_title_label, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_align(status_title_label, LV_ALIGN_TOP_MID, 0, 24);
 
-    status_time_label = lv_label_create(scr);
-    lv_obj_set_width(status_time_label, ACTUAL_DISP_HOR_RES / 2U);
+    accent_line = lv_obj_create(scr);
+    lv_obj_set_size(accent_line, 332, 4);
+    lv_obj_set_style_bg_color(accent_line, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(accent_line, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(accent_line, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(accent_line, 2, LV_PART_MAIN);
+    lv_obj_clear_flag(accent_line, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(accent_line, LV_ALIGN_TOP_MID, 0, 78);
+
+    time_panel = lv_obj_create(scr);
+    lv_obj_set_size(time_panel, 330, 212);
+    lv_obj_align(time_panel, LV_ALIGN_LEFT_MID, 44, 54);
+    lv_obj_set_style_bg_color(time_panel, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(time_panel, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_color(time_panel, lv_color_hex(0x1F6FEB), LV_PART_MAIN);
+    lv_obj_set_style_border_width(time_panel, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(time_panel, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(time_panel, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(time_panel, LV_OBJ_FLAG_SCROLLABLE);
+
+    time_accent = lv_obj_create(time_panel);
+    lv_obj_set_size(time_accent, 6, 168);
+    lv_obj_set_style_bg_color(time_accent, lv_color_hex(0x1F6FEB), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(time_accent, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(time_accent, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(time_accent, 3, LV_PART_MAIN);
+    lv_obj_clear_flag(time_accent, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(time_accent, LV_ALIGN_LEFT_MID, 18, 0);
+
+    time_caption = lv_label_create(time_panel);
+    lv_obj_set_width(time_caption, 250);
+    lv_label_set_long_mode(time_caption, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(time_caption, "CURRENT TIME");
+    lv_obj_set_style_text_color(time_caption, lv_color_hex(0x8FBFFF), LV_PART_MAIN);
+    lv_obj_set_style_text_font(time_caption, &lv_font_montserrat_16, LV_PART_MAIN);
+    lv_obj_align(time_caption, LV_ALIGN_TOP_LEFT, 40, 28);
+
+    status_date_label = lv_label_create(time_panel);
+    lv_obj_set_width(status_date_label, 250);
+    lv_label_set_long_mode(status_date_label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_color(status_date_label, lv_color_hex(0xAEB7C2), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_date_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_date_label, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_align(status_date_label, LV_ALIGN_LEFT_MID, 40, -12);
+
+    status_time_label = lv_label_create(time_panel);
+    lv_obj_set_width(status_time_label, 250);
     lv_label_set_long_mode(status_time_label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_color(status_time_label, lv_color_hex(0xEAF4FF), LV_PART_MAIN);
     lv_obj_set_style_text_align(status_time_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-    lv_obj_set_style_text_font(status_time_label, &lv_font_montserrat_24, LV_PART_MAIN);
-    lv_obj_align(status_time_label, LV_ALIGN_LEFT_MID, 64, 36);
+    lv_obj_set_style_text_font(status_time_label, &lv_font_montserrat_36, LV_PART_MAIN);
+    lv_obj_align(status_time_label, LV_ALIGN_LEFT_MID, 40, 38);
 
-    status_mowo_label = lv_label_create(scr);
-    lv_obj_set_width(status_mowo_label, (ACTUAL_DISP_HOR_RES / 2U) + 120U);
-    lv_label_set_long_mode(status_mowo_label, LV_LABEL_LONG_CLIP);
-    lv_label_set_text(status_mowo_label, "MOWO number: 0\n(confidence>0.95)");
-    lv_obj_set_style_text_color(status_mowo_label, lv_color_hex(0xEAF4FF), LV_PART_MAIN);
-    lv_obj_set_style_text_align(status_mowo_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-    lv_obj_set_style_text_font(status_mowo_label, &lv_font_montserrat_20, LV_PART_MAIN);
-    lv_obj_align(status_mowo_label, LV_ALIGN_RIGHT_MID, -136, 36);
+    mowo_panel = lv_obj_create(scr);
+    lv_obj_set_size(mowo_panel, 350, 212);
+    lv_obj_align(mowo_panel, LV_ALIGN_RIGHT_MID, -44, 54);
+    lv_obj_set_style_bg_color(mowo_panel, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(mowo_panel, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_color(mowo_panel, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_border_width(mowo_panel, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(mowo_panel, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(mowo_panel, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(mowo_panel, LV_OBJ_FLAG_SCROLLABLE);
 
+    mowo_accent = lv_obj_create(mowo_panel);
+    lv_obj_set_size(mowo_accent, 6, 168);
+    lv_obj_set_style_bg_color(mowo_accent, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(mowo_accent, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(mowo_accent, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(mowo_accent, 3, LV_PART_MAIN);
+    lv_obj_clear_flag(mowo_accent, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(mowo_accent, LV_ALIGN_LEFT_MID, 18, 0);
+
+    mowo_caption = lv_label_create(mowo_panel);
+    lv_obj_set_width(mowo_caption, 260);
+    lv_label_set_long_mode(mowo_caption, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(mowo_caption, "DETECTIONS");
+    lv_obj_set_style_text_color(mowo_caption, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_text_font(mowo_caption, &lv_font_montserrat_16, LV_PART_MAIN);
+    lv_obj_align(mowo_caption, LV_ALIGN_TOP_LEFT, 40, 28);
+
+    mowo_name_label = lv_label_create(mowo_panel);
+    lv_obj_set_width(mowo_name_label, 172);
+    lv_label_set_long_mode(mowo_name_label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(mowo_name_label, "MOWO number:");
+    lv_obj_set_style_text_color(mowo_name_label, lv_color_hex(0xEAF4FF), LV_PART_MAIN);
+    lv_obj_set_style_text_font(mowo_name_label, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_align(mowo_name_label, LV_ALIGN_LEFT_MID, 40, 10);
+
+    status_mowo_count_label = lv_label_create(mowo_panel);
+    lv_obj_set_width(status_mowo_count_label, 104);
+    lv_label_set_long_mode(status_mowo_count_label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(status_mowo_count_label, "0");
+    lv_obj_set_style_text_color(status_mowo_count_label, lv_color_hex(0xF8E16C), LV_PART_MAIN);
+    lv_obj_set_style_text_align(status_mowo_count_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+    lv_obj_set_style_text_font(status_mowo_count_label, &lv_font_montserrat_36, LV_PART_MAIN);
+    lv_obj_align(status_mowo_count_label, LV_ALIGN_RIGHT_MID, -32, 0);
+
+    confidence_label = lv_label_create(mowo_panel);
+    lv_obj_set_width(confidence_label, 260);
+    lv_label_set_long_mode(confidence_label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(confidence_label, "(confidence>0.95)");
+    lv_obj_set_style_text_color(confidence_label, lv_color_hex(0xAEB7C2), LV_PART_MAIN);
+    lv_obj_set_style_text_font(confidence_label, &lv_font_montserrat_16, LV_PART_MAIN);
+    lv_obj_align(confidence_label, LV_ALIGN_BOTTOM_LEFT, 40, -30);
+
+    status_clock_year = 0U;
+    status_clock_month = 0U;
+    status_clock_day = 0U;
     status_clock_hour = 0U;
     status_clock_min = 0U;
     status_clock_sec = 0U;
+    status_mowo_last_count = 0xFFFFFFFFUL;
     update_hachimitsu_status_text();
     lv_obj_invalidate(scr);
 

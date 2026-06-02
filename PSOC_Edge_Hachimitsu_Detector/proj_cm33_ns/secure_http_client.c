@@ -594,9 +594,12 @@ static void publish_rtc_clock_to_cm55(void)
     cy_stc_rtc_config_t curr_date_time;
 
     Cy_RTC_GetDateAndTime(&curr_date_time);
-    shared_mem_set_clock((uint8_t)curr_date_time.hour,
-                         (uint8_t)curr_date_time.min,
-                         (uint8_t)curr_date_time.sec);
+    shared_mem_set_datetime((uint16_t)(curr_date_time.year + 2000U),
+                            (uint8_t)curr_date_time.month,
+                            (uint8_t)curr_date_time.date,
+                            (uint8_t)curr_date_time.hour,
+                            (uint8_t)curr_date_time.min,
+                            (uint8_t)curr_date_time.sec);
 }
 
 cy_rslt_t fetch_https_client_method(cy_http_client_method_t method, const char *path,

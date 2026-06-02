@@ -33,6 +33,10 @@ typedef struct {
 void shared_mem_init(void);
 void shared_mem_set_clock(uint8_t hour, uint8_t min, uint8_t sec);
 bool shared_mem_get_clock(uint8_t *hour, uint8_t *min, uint8_t *sec);
+void shared_mem_set_datetime(uint16_t year, uint8_t month, uint8_t day,
+                             uint8_t hour, uint8_t min, uint8_t sec);
+bool shared_mem_get_datetime(uint16_t *year, uint8_t *month, uint8_t *day,
+                             uint8_t *hour, uint8_t *min, uint8_t *sec);
 bool get_msg(ipc_msg_t * msg);
 bool write_msg(const ipc_msg_t * msg);
 
