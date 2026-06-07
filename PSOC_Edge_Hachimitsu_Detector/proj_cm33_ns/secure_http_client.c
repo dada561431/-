@@ -9,6 +9,7 @@
 #include "cy_tls.h"
 #include "cy_wcm.h"
 #include "cy_wcm_error.h"
+#include "cy_rtc.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,6 +37,7 @@
 #define APP_SDIO_FREQUENCY_HZ           (25000000U)
 #define SDHC_SDIO_64BYTES_BLOCK         (64U)
 #define INITIAL_VALUE                   (0U)
+#define CLOCK_PUBLISH_PERIOD_MS         (1000U)
 
 static cy_awsport_ssl_credentials_t security_config;
 static cy_awsport_server_info_t server_info;
@@ -94,6 +96,7 @@ static void cleanup_http_client(void);
 static cy_rslt_t ensure_connection_ready(void);
 static void wifi_event_callback(cy_wcm_event_t event, cy_wcm_event_data_t *event_data);
 static void request_reconnect(const char *reason);
+static void publish_rtc_clock_to_cm55(void);
 
 static void sdio_interrupt_handler(void)
 {
@@ -120,6 +123,7 @@ static void app_sdio_init(void)
         .intrPriority = APP_HOST_WAKE_INTERRUPT_PRIORITY
     };
 
+    printf("[WIFI] SDIO_INIT_BEGIN\n");
     cy_en_sysint_status_t interrupt_init_status = Cy_SysInt_Init(&sdio_intr_cfg,
                                                                  sdio_interrupt_handler);
     if (CY_SYSINT_SUCCESS != interrupt_init_status)
@@ -127,6 +131,7 @@ static void app_sdio_init(void)
         handle_app_error();
     }
     NVIC_EnableIRQ(CYBSP_WIFI_SDIO_IRQ);
+    printf("[WIFI] SDIO_IRQ_READY\n");
 
     result = mtb_hal_sdio_setup(&sdio_instance,
                                 &CYBSP_WIFI_SDIO_sdio_hal_config,
@@ -136,6 +141,7 @@ static void app_sdio_init(void)
     {
         handle_app_error();
     }
+    printf("[WIFI] SDIO_HAL_READY\n");
 
     Cy_SD_Host_Enable(CYBSP_WIFI_SDIO_HW);
     Cy_SD_Host_Init(CYBSP_WIFI_SDIO_HW,
@@ -145,6 +151,7 @@ static void app_sdio_init(void)
     sdio_hal_cfg.frequencyhal_hz = APP_SDIO_FREQUENCY_HZ;
     sdio_hal_cfg.block_size = SDHC_SDIO_64BYTES_BLOCK;
     mtb_hal_sdio_configure(&sdio_instance, &sdio_hal_cfg);
+    printf("[WIFI] SDIO_HOST_READY\n");
 
     mtb_hal_gpio_setup(&wcm_config.wifi_wl_pin,
                        CYBSP_WIFI_WL_REG_ON_PORT_NUM,
@@ -152,6 +159,7 @@ static void app_sdio_init(void)
     mtb_hal_gpio_setup(&wcm_config.wifi_host_wake_pin,
                        CYBSP_WIFI_HOST_WAKE_PORT_NUM,
                        CYBSP_WIFI_HOST_WAKE_PIN);
+    printf("[WIFI] SDIO_GPIO_READY\n");
 
     cy_en_sysint_status_t interrupt_init_status_host_wake =
         Cy_SysInt_Init(&host_wake_intr_cfg, host_wake_interrupt_handler);
@@ -160,6 +168,7 @@ static void app_sdio_init(void)
         handle_app_error();
     }
     NVIC_EnableIRQ(CYBSP_WIFI_HOST_WAKE_IRQ);
+    printf("[WIFI] SDIO_INIT_DONE\n");
 }
 
 static void print_ip_address(const cy_wcm_ip_address_t *address)
@@ -268,7 +277,9 @@ static cy_rslt_t wifi_connect(void)
         wcm_config.interface = CY_WCM_INTERFACE_TYPE_STA;
         wcm_config.wifi_interface_instance = &sdio_instance;
 
+        printf("[WIFI] WCM_INIT_BEGIN\n");
         result = cy_wcm_init(&wcm_config);
+        printf("[WIFI] WCM_INIT_DONE status=0x%08lX\n", (unsigned long)result);
         if (CY_RSLT_SUCCESS != result)
         {
             printf("[HTTP_TASK] Wi-Fi Connection Manager initialization failed!\n");
@@ -543,6 +554,7 @@ static cy_rslt_t ensure_connection_ready(void)
 void https_client_task(void *arg)
 {
     cy_rslt_t result;
+    TickType_t last_clock_publish_tick = 0U;
     (void)arg;
 
     https_client_task_handle = xTaskGetCurrentTaskHandle();
@@ -551,9 +563,19 @@ void https_client_task(void *arg)
 
     printf("Successfully connected to http server\r\n");
     sync_rtc();
+    publish_rtc_clock_to_cm55();
+    last_clock_publish_tick = xTaskGetTickCount();
 
     while (true)
     {
+        TickType_t now_tick = xTaskGetTickCount();
+
+        if ((now_tick - last_clock_publish_tick) >= pdMS_TO_TICKS(CLOCK_PUBLISH_PERIOD_MS))
+        {
+            publish_rtc_clock_to_cm55();
+            last_clock_publish_tick = now_tick;
+        }
+
         result = ensure_connection_ready();
         if (CY_RSLT_SUCCESS != result)
         {
@@ -565,6 +587,19 @@ void https_client_task(void *arg)
         send_hachimitsu_log();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
     }
+}
+
+static void publish_rtc_clock_to_cm55(void)
+{
+    cy_stc_rtc_config_t curr_date_time;
+
+    Cy_RTC_GetDateAndTime(&curr_date_time);
+    shared_mem_set_datetime((uint16_t)(curr_date_time.year + 2000U),
+                            (uint8_t)curr_date_time.month,
+                            (uint8_t)curr_date_time.date,
+                            (uint8_t)curr_date_time.hour,
+                            (uint8_t)curr_date_time.min,
+                            (uint8_t)curr_date_time.sec);
 }
 
 cy_rslt_t fetch_https_client_method(cy_http_client_method_t method, const char *path,

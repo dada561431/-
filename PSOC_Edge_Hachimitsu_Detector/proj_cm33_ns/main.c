@@ -57,6 +57,9 @@
 #define HTTPS_CLIENT_TASK_PRIORITY          (3U)
 #define IPC_PIPE_INIT_TASK_STACK_SIZE       (10U * 1024U)
 #define IPC_PIPE_INIT_TASK_PRIORITY          (2U)
+#define CM55_BOOT_TASK_STACK_SIZE           (2048U)
+#define CM55_BOOT_TASK_PRIORITY             (1U)
+#define CM55_BOOT_DELAY_MS                  (8000U)
 
 /* The timeout value in microseconds used to wait for the CM55 core to be booted */
 #define CM55_BOOT_WAIT_TIME_US              (10U)
@@ -83,6 +86,8 @@ static mtb_hal_lptimer_t lptimer_obj;
 /* HTTPS client task handle. */
 TaskHandle_t https_client_task_handle;
 cy_rslt_t boot_http_task();
+static cy_rslt_t boot_cm55_task(void);
+static void cm55_boot_task(void *arg);
 
 /* RTC HAL object */
 static mtb_hal_rtc_t rtc_obj;
@@ -245,14 +250,8 @@ int main(void)
     /* Enable global interrupts */
     __enable_irq();
 
-   /* Enable CM55. CM55_APP_BOOT_ADDR must be updated if CM55 memory layout
-    * is changed.
-    */
-
 	/* 初始化ipc_pipe */
 	// ipc_pipe_init();
-
-    Cy_SysEnableCM55(MXCM55, CM55_APP_BOOT_ADDR, CM55_BOOT_WAIT_TIME_US);
 
 	// Cy_SysLib_Delay(CM33_APP_DELAY_MS);
     
@@ -261,6 +260,10 @@ int main(void)
 	// 			IPC_PIPE_INIT_TASK_STACK_SIZE, NULL, 
 	// 			IPC_PIPE_INIT_TASK_PRIORITY, &ipc_pipe_task_handle);
 	result = boot_http_task();
+    if (pdPASS == result)
+    {
+        result = boot_cm55_task();
+    }
 
 
     /* Start the FreeRTOS scheduler */
@@ -280,5 +283,27 @@ cy_rslt_t boot_http_task() {
 	return xTaskCreate(https_client_task, "HTTPS Client",
                 HTTPS_CLIENT_TASK_STACK_SIZE, NULL,
                 HTTPS_CLIENT_TASK_PRIORITY, &https_client_task_handle);
+}
+
+static cy_rslt_t boot_cm55_task(void)
+{
+    return xTaskCreate(cm55_boot_task, "CM55 Boot",
+                       CM55_BOOT_TASK_STACK_SIZE, NULL,
+                       CM55_BOOT_TASK_PRIORITY, NULL);
+}
+
+static void cm55_boot_task(void *arg)
+{
+    (void)arg;
+
+    printf("[CM55_BOOT] Delaying CM55 start for %lu ms\n",
+           (unsigned long)CM55_BOOT_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(CM55_BOOT_DELAY_MS));
+
+    printf("[CM55_BOOT] Enabling CM55\n");
+    Cy_SysEnableCM55(MXCM55, CM55_APP_BOOT_ADDR, CM55_BOOT_WAIT_TIME_US);
+    printf("[CM55_BOOT] CM55 enable requested\n");
+
+    vTaskDelete(NULL);
 }
 /* [] END OF FILE */

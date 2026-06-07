@@ -74,7 +74,7 @@
                                          }                              \
                                      } while(0);
 #define HTTPS_PORT                               8080
-#define HTTPS_SERVER_HOST                        "192.168.3.32"
+#define HTTPS_SERVER_HOST                        "192.168.3.6"
 #define TRANSPORT_SEND_RECV_TIMEOUT_MS           (10000U)
 #define HTTP_GET_BUFFER_LENGTH                   (2048U)
 

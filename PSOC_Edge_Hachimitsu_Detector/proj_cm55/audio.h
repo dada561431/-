@@ -43,6 +43,7 @@
 #include "stdbool.h"
 #include "global_constants.h"
 #include "model.h"
+#include <stdint.h>
 
 /******************************************************************************
  * Constants
@@ -58,6 +59,7 @@
 *******************************************************************************/
 cy_rslt_t pdm_init(void);
 cy_rslt_t pdm_data_process(void);
+uint32_t audio_get_high_confidence_upload_count(void);
 
 
 #endif /* AUDIO_H_ */

@@ -348,6 +348,8 @@ SECTIONS
     /* A section for the GPU buffer */
     .cy_gpu_buf(NOLOAD) :
     {
+        /* CM33 camera/upload buffers occupy the beginning of gfx_mem. */
+        . += 0x90000;
         KEEP(*(.cy_gpu_buf))
     } > gfx_mem
 

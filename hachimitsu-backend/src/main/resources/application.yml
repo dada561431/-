@@ -23,6 +23,10 @@ spring:
 
 app:
   upload-dir: D:/mtw/hachimitsu-backend/uploads
+  audio-analysis:
+    enabled: true
+    url: http://127.0.0.1:5055/analyze
+    timeout-ms: 3000
 
 logging:
   level:

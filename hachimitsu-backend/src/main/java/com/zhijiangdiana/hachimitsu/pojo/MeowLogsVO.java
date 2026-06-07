@@ -23,6 +23,10 @@ public class MeowLogsVO {
     private String imageUrl;
     private String audioUrl;
     private Integer audioDurationMs;
+    private String audioAnalysisStatus;
+    private String catClusterId;
+    private Double catClusterDistance;
+    private Integer catClusterSampleCount;
     private String time;
     private Boolean isCat;
 }

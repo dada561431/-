@@ -63,7 +63,28 @@ NN_INFERENCE_ENGINE=tflm
 # ... then code in directories named COMPONENT_foo and COMPONENT_bar will be
 # added to the build
 #
-COMPONENTS+=
+COMPONENTS+=FREERTOS RTOS_AWARE
+
+ifeq ($(CONFIG_DISPLAY), WF101JTYAHMNB0_DISP)
+DEFINES += MTB_DISPLAY_EK79007AD3 MTB_CTP_ILI2511
+CY_IGNORE += $(SEARCH_display-dsi-waveshare-7-0-lcd-c)
+CY_IGNORE += $(SEARCH_touch-ctp-gt911)
+CY_IGNORE += $(SEARCH_display-dsi-waveshare-4-3-lcd)
+CY_IGNORE += $(SEARCH_touch-ctp-ft5406)
+else ifeq ($(CONFIG_DISPLAY), WS7P0DSI_RPI_DISP)
+DEFINES += MTB_DISPLAY_WS7P0DSI_RPI MTB_CTP_GT911
+CY_IGNORE += $(SEARCH_display-tft-ek79007ad3)
+CY_IGNORE += $(SEARCH_touch-ctp-ili2511)
+CY_IGNORE += $(SEARCH_display-dsi-waveshare-4-3-lcd)
+CY_IGNORE += $(SEARCH_touch-ctp-ft5406)
+else ifeq ($(CONFIG_DISPLAY), W4P3INCH_DISP)
+DEFINES += MTB_DISPLAY_W4P3INCH_RPI MTB_CTP_FT5406
+CY_IGNORE += $(SEARCH_display-tft-ek79007ad3)
+CY_IGNORE += $(SEARCH_touch-ctp-ili2511)
+CY_IGNORE += $(SEARCH_display-dsi-waveshare-7-0-lcd-c)
+CY_IGNORE += $(SEARCH_touch-ctp-gt911)
+CY_IGNORE += $(SEARCH_display-dsi-waveshare-4-3-lcd)/mtb_disp_dsi_waveshare_4p3.c
+endif
 
 # Like COMPONENTS, but disable optional code that was enabled by default.
 DISABLE_COMPONENTS=
@@ -84,7 +105,7 @@ SOURCES+=
 INCLUDES+=
 
 # Add additional defines to the build process (without a leading -D).
-DEFINES+=CY_RETARGET_IO_CONVERT_LF_TO_CRLF
+DEFINES+=CY_RETARGET_IO_CONVERT_LF_TO_CRLF _BAREMETAL=0
 
 # Add additional defines related to ARM Helium and DSP extensions
 DEFINES+=ARM_MATH_HELIUM ARM_MATH_DSP ARM_MATH_AUTOVECTORIZE
@@ -113,6 +134,14 @@ endif
 ifeq (int8x8, $(NN_TYPE))
 COMPONENTS+=ML_INT8x8
 endif
+
+# Ignore unused LVGL middleware files from compilation. Local patched copies of
+# the GFXSS/VGLite renderer files are used by this application.
+CY_IGNORE += $(SEARCH_lvgl)/src/others/vg_lite_tvg $(SEARCH_lvgl)/src/libs/thorvg $(SEARCH_lvgl)/tests
+CY_IGNORE += $(SEARCH_lvgl)/draw/nxp $(SEARCH_lvgl)/draw/renesas $(SEARCH_lvgl)/examples
+CY_IGNORE += $(SEARCH_lvgl)/src/draw/vg_lite/lv_draw_vg_lite.c $(SEARCH_lvgl)/src/draw/vg_lite/lv_vg_lite_utils.c
+CY_IGNORE += $(SEARCH_lvgl)/src/draw/vg_lite/lv_draw_vg_lite_img.c $(SEARCH_lvgl)/src/draw/sw/blend/helium
+CY_IGNORE += $(SEARCH_lvgl)/src/draw/sw/blend/neon $(SEARCH_lvgl)/src/core/lv_refr.c
 
 # Select softfp or hardfp floating point. Default is softfp.
 VFP_SELECT+=hardfp

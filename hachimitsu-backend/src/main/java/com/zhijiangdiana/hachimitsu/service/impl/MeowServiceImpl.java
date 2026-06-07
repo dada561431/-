@@ -3,9 +3,11 @@ package com.zhijiangdiana.hachimitsu.service.impl;
 import com.alibaba.fastjson.JSON;
 import com.zhijiangdiana.hachimitsu.pojo.AddMeowDto;
 import com.zhijiangdiana.hachimitsu.pojo.AddressDto;
+import com.zhijiangdiana.hachimitsu.pojo.AudioAnalysisResult;
 import com.zhijiangdiana.hachimitsu.pojo.AttachMeowImageDto;
 import com.zhijiangdiana.hachimitsu.pojo.Meow;
 import com.zhijiangdiana.hachimitsu.service.AddressService;
+import com.zhijiangdiana.hachimitsu.service.AudioAnalysisService;
 import com.zhijiangdiana.hachimitsu.service.AudioStorageService;
 import com.zhijiangdiana.hachimitsu.service.CacheService;
 import com.zhijiangdiana.hachimitsu.service.ImageStorageService;
@@ -51,6 +53,9 @@ public class MeowServiceImpl implements MeowService {
 
     @Autowired
     private AudioStorageService audioStorageService;
+
+    @Autowired
+    private AudioAnalysisService audioAnalysisService;
 
     @Override
     public void saveMeowLog(AddMeowDto dto, String ip) {
@@ -273,6 +278,7 @@ public class MeowServiceImpl implements MeowService {
                                             Integer audioSampleRate,
                                             Integer audioSampleCount) {
         Meow meow;
+        AudioAnalysisResult analysisResult;
 
         meow = findMeowForImageAttach(equipmentId, timestamp);
         if (meow == null) {
@@ -294,6 +300,18 @@ public class MeowServiceImpl implements MeowService {
         meow.setAudioDurationMs(audioDurationMs);
         meow.setAudioSampleRate(audioSampleRate);
         meow.setAudioSampleCount(audioSampleCount);
+
+        analysisResult = audioAnalysisService.analyzeStoredAudio(equipmentId, timestamp, audioUrl);
+        if (analysisResult != null) {
+            meow.setAudioAnalysisStatus(analysisResult.getStatus());
+            meow.setAudioEmbedding(analysisResult.getEmbedding());
+            meow.setAudioEnergy(analysisResult.getEnergy());
+            meow.setAudioZeroCrossingRate(analysisResult.getZeroCrossingRate());
+            meow.setCatClusterId(analysisResult.getClusterId());
+            meow.setCatClusterDistance(analysisResult.getClusterDistance());
+            meow.setCatClusterSampleCount(analysisResult.getClusterSampleCount());
+        }
+
         mongoTemplate.save(meow);
         messagingTemplate.convertAndSend("/topic/logs", meow);
         return true;

@@ -2,6 +2,7 @@ package com.zhijiangdiana.hachimitsu.controller;
 
 import com.mongodb.client.MongoClient;
 import com.zhijiangdiana.hachimitsu.pojo.*;
+import com.zhijiangdiana.hachimitsu.service.AudioAnalysisService;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
@@ -11,6 +12,7 @@ import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,9 +25,12 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @Description
@@ -50,6 +55,9 @@ public class StatisticController {
     private final ZoneId zoneId = ZoneId.of("Asia/Shanghai");
     @Autowired
     private MongoClient mongo;
+
+    @Autowired
+    private AudioAnalysisService audioAnalysisService;
 
     @GetMapping("/charts/line")
     public ResponseResult getLineChart(Integer windowLength) {
@@ -184,6 +192,10 @@ public class StatisticController {
                     .imageUrl(log.getImageUrl())
                     .audioUrl(log.getAudioUrl())
                     .audioDurationMs(log.getAudioDurationMs())
+                    .audioAnalysisStatus(log.getAudioAnalysisStatus())
+                    .catClusterId(log.getCatClusterId())
+                    .catClusterDistance(log.getCatClusterDistance())
+                    .catClusterSampleCount(log.getCatClusterSampleCount())
                     .time(log.getCreateTime()
                             .toInstant()
                             .atZone(zoneId)
@@ -194,6 +206,134 @@ public class StatisticController {
         }
 
         return ResponseResult.okResult(res);
+    }
+
+    @GetMapping("/cats/clusters")
+    public ResponseResult getCatClusters(@RequestParam(defaultValue = "3") Integer stableSampleCount,
+                                         @RequestParam(required = false) Integer windowMinutes) {
+        List<Meow> logs;
+        Criteria criteria;
+        Map<String, ClusterAccumulator> clusters = new HashMap<>();
+        List<CatClusterVO> result = new ArrayList<>();
+
+        if (stableSampleCount == null || stableSampleCount < 1) {
+            stableSampleCount = 3;
+        }
+
+        criteria = Criteria.where("catClusterId").exists(true).ne(null);
+        if (windowMinutes != null && windowMinutes > 0) {
+            criteria = new Criteria().andOperator(
+                    criteria,
+                    Criteria.where("createTime").gte(Date.from(Instant.now().minus(windowMinutes, ChronoUnit.MINUTES)))
+            );
+        }
+
+        logs = mongoTemplate.find(Query.query(criteria), Meow.class);
+        for (Meow log : logs) {
+            if (log.getCatClusterId() == null || log.getCatClusterId().isBlank()) {
+                continue;
+            }
+            clusters.computeIfAbsent(log.getCatClusterId(), ClusterAccumulator::new).add(log);
+        }
+
+        for (ClusterAccumulator cluster : clusters.values()) {
+            result.add(CatClusterVO.builder()
+                    .clusterId(cluster.clusterId)
+                    .sampleCount(cluster.sampleCount)
+                    .stable(cluster.sampleCount >= stableSampleCount)
+                    .firstSeen(cluster.firstSeen)
+                    .lastSeen(cluster.lastSeen)
+                    .averageDistance(cluster.distanceCount == 0 ? null : cluster.distanceSum / cluster.distanceCount)
+                    .build());
+        }
+
+        result.sort(Comparator.comparing(CatClusterVO::getSampleCount).reversed());
+        return ResponseResult.okResult(result);
+    }
+
+    @PostMapping("/cats/rebuild-clusters")
+    public ResponseResult rebuildCatClusters() {
+        List<Meow> logs;
+        int analyzed = 0;
+        int failed = 0;
+        int clustered = 0;
+
+        if (!audioAnalysisService.resetClusters()) {
+            return ResponseResult.errorResult(500, "audio analysis reset failed");
+        }
+
+        logs = mongoTemplate.find(Query.query(Criteria.where("audioUrl").exists(true).nin(null, ""))
+                        .with(Sort.by(Sort.Direction.ASC, "createTime")),
+                Meow.class);
+
+        for (Meow log : logs) {
+            AudioAnalysisResult result;
+            Long timestamp;
+
+            if (log.getAudioUrl() == null || log.getAudioUrl().isBlank()) {
+                continue;
+            }
+
+            timestamp = log.getCreateTime() == null ? System.currentTimeMillis() : log.getCreateTime().getTime();
+            result = audioAnalysisService.analyzeStoredAudio(log.getEquipmentId(), timestamp, log.getAudioUrl());
+            analyzed++;
+
+            if (result == null || !"ok".equalsIgnoreCase(result.getStatus())) {
+                failed++;
+                log.setAudioAnalysisStatus(result == null ? "no_result" : result.getStatus());
+                mongoTemplate.save(log);
+                continue;
+            }
+
+            log.setAudioAnalysisStatus(result.getStatus());
+            log.setAudioEmbedding(result.getEmbedding());
+            log.setAudioEnergy(result.getEnergy());
+            log.setAudioZeroCrossingRate(result.getZeroCrossingRate());
+            log.setCatClusterId(result.getClusterId());
+            log.setCatClusterDistance(result.getClusterDistance());
+            log.setCatClusterSampleCount(result.getClusterSampleCount());
+            mongoTemplate.save(log);
+
+            if (result.getClusterId() != null && !result.getClusterId().isBlank()) {
+                clustered++;
+            }
+        }
+
+        return ResponseResult.okResult(RebuildClustersVO.builder()
+                .total(logs.size())
+                .analyzed(analyzed)
+                .failed(failed)
+                .clustered(clustered)
+                .build());
+    }
+
+    private static class ClusterAccumulator {
+        private final String clusterId;
+        private int sampleCount;
+        private double distanceSum;
+        private int distanceCount;
+        private Date firstSeen;
+        private Date lastSeen;
+
+        private ClusterAccumulator(String clusterId) {
+            this.clusterId = clusterId;
+        }
+
+        private void add(Meow meow) {
+            Date createTime = meow.getCreateTime();
+
+            sampleCount++;
+            if (meow.getCatClusterDistance() != null) {
+                distanceSum += meow.getCatClusterDistance();
+                distanceCount++;
+            }
+            if (createTime != null && (firstSeen == null || createTime.before(firstSeen))) {
+                firstSeen = createTime;
+            }
+            if (createTime != null && (lastSeen == null || createTime.after(lastSeen))) {
+                lastSeen = createTime;
+            }
+        }
     }
 }
 

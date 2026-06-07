@@ -5,6 +5,7 @@ import lombok.ToString;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.Date;
+import java.util.List;
 
 /**
  * @Description
@@ -26,5 +27,12 @@ public class Meow {
     private Integer audioDurationMs;
     private Integer audioSampleRate;
     private Integer audioSampleCount;
+    private String audioAnalysisStatus;
+    private List<Double> audioEmbedding;
+    private Double audioEnergy;
+    private Double audioZeroCrossingRate;
+    private String catClusterId;
+    private Double catClusterDistance;
+    private Integer catClusterSampleCount;
     private Date createTime;
 }
