@@ -27,6 +27,12 @@ public class MeowLogsVO {
     private String catClusterId;
     private Double catClusterDistance;
     private Integer catClusterSampleCount;
+    private String emotionStatus;
+    private String emotionCode;
+    private String emotionLabel;
+    private Double emotionScore;
+    private java.util.List<AudioEmotionScore> emotionScores;
+    private String emotionMessage;
     private String time;
     private Boolean isCat;
 }
