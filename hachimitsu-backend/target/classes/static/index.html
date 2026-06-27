@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hachimitsu 猫叫检测看板</title>
+    <title>Hachimitsu 流浪猫监测系统</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
@@ -11,157 +11,379 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <style>
         :root {
-            --bg: #f4f7fb;
-            --panel: #ffffff;
-            --panel-muted: #f8fafc;
-            --border: #d9e2ec;
-            --text: #102a43;
-            --muted: #627d98;
-            --shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+            --bg: #070b12;
+            --panel: rgba(15, 25, 36, 0.88);
+            --panel-strong: rgba(18, 31, 45, 0.96);
+            --panel-muted: rgba(18, 29, 42, 0.72);
+            --border: rgba(125, 211, 252, 0.18);
+            --border-strong: rgba(45, 212, 191, 0.42);
+            --text: #e6f6ff;
+            --muted: #8aa3b7;
+            --accent: #20e3d2;
+            --accent-blue: #38bdf8;
+            --accent-violet: #8b5cf6;
+            --warning: #f59e0b;
+            --danger: #fb7185;
+            --shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
         }
 
         * { box-sizing: border-box; }
 
         body {
             margin: 0;
+            min-height: 100vh;
             font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
             background:
-                radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 30%),
-                linear-gradient(180deg, #f9fbfd 0%, var(--bg) 100%);
+                linear-gradient(rgba(45, 212, 191, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px),
+                linear-gradient(135deg, rgba(32, 227, 210, 0.14) 0%, transparent 28%),
+                linear-gradient(215deg, rgba(139, 92, 246, 0.18) 0%, transparent 32%),
+                var(--bg);
+            background-size: 44px 44px, 44px 44px, auto, auto, auto;
             color: var(--text);
         }
 
-        .shell { min-height: 100vh; padding: 24px; }
-        .container { max-width: 1280px; margin: 0 auto; }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
+                repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 7px);
+            mix-blend-mode: screen;
+            opacity: 0.42;
+            z-index: 0;
+        }
+
+        .shell {
+            position: relative;
+            min-height: 100vh;
+            padding: 24px;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .ambient-paws {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ambient-paws span {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(32, 227, 210, 0.32);
+            opacity: 0.22;
+            transform: rotate(-24deg);
+            animation: pawDrift 11s linear infinite;
+        }
+
+        .ambient-paws span::before,
+        .ambient-paws span::after {
+            content: "";
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            border: 1px solid rgba(32, 227, 210, 0.32);
+            top: -8px;
+        }
+
+        .ambient-paws span::before { left: -2px; }
+        .ambient-paws span::after { right: -2px; }
+        .ambient-paws span:nth-child(1) { left: 9%; top: 19%; animation-delay: -2s; }
+        .ambient-paws span:nth-child(2) { left: 76%; top: 13%; animation-delay: -6s; }
+        .ambient-paws span:nth-child(3) { left: 88%; top: 58%; animation-delay: -9s; }
+        .ambient-paws span:nth-child(4) { left: 18%; top: 78%; animation-delay: -4s; }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1360px;
+            margin: 0 auto;
+        }
 
         .hero {
+            position: relative;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 24px;
-            padding: 24px 28px;
-            background: rgba(255, 255, 255, 0.88);
-            border: 1px solid rgba(217, 226, 236, 0.9);
-            border-radius: 24px;
+            padding: 22px 24px;
+            background:
+                linear-gradient(135deg, rgba(32, 227, 210, 0.16), transparent 36%),
+                linear-gradient(180deg, rgba(18, 31, 45, 0.94), rgba(10, 16, 25, 0.92));
+            border: 1px solid var(--border);
+            border-radius: 16px;
             box-shadow: var(--shadow);
             backdrop-filter: blur(18px);
+            overflow: hidden;
         }
 
-        .brand { display: flex; align-items: center; gap: 14px; }
+        .hero::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-blue), transparent);
+            opacity: 0.85;
+        }
+
+        .brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 16px; min-width: 0; }
 
         .brand-mark {
-            width: 52px;
-            height: 52px;
+            position: relative;
+            width: 56px;
+            height: 56px;
             border-radius: 16px;
             display: grid;
             place-items: center;
-            font-weight: 800;
-            color: white;
-            background: linear-gradient(135deg, #0f766e, #0ea5a3);
-            box-shadow: 0 14px 30px rgba(15, 118, 110, 0.26);
+            font-weight: 900;
+            color: #061017;
+            background: linear-gradient(135deg, var(--accent), var(--accent-blue));
+            box-shadow: 0 0 34px rgba(32, 227, 210, 0.36);
         }
 
-        .hero h1 { margin: 0; font-size: 28px; line-height: 1.1; }
-        .hero p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+        .brand-mark::before,
+        .brand-mark::after {
+            content: "";
+            position: absolute;
+            top: -8px;
+            width: 18px;
+            height: 18px;
+            background: var(--accent);
+            clip-path: polygon(50% 0, 0 100%, 100% 100%);
+        }
+
+        .brand-mark::before { left: 7px; transform: rotate(-16deg); }
+        .brand-mark::after { right: 7px; transform: rotate(16deg); }
+
+        .brand-kicker {
+            margin: 0 0 4px;
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .hero h1 { margin: 0; font-size: 28px; line-height: 1.1; letter-spacing: 0; }
+        .hero p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 
         .status-pill {
+            position: relative;
+            z-index: 1;
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 14px;
+            padding: 11px 15px;
             border-radius: 999px;
-            border: 1px solid var(--border);
-            background: var(--panel);
+            border: 1px solid var(--border-strong);
+            background: linear-gradient(135deg, rgba(32, 227, 210, 0.16), rgba(5, 12, 20, 0.86));
+            color: #dffcff;
             font-size: 14px;
+            box-shadow: inset 0 0 22px rgba(32, 227, 210, 0.10), 0 0 26px rgba(32, 227, 210, 0.16);
+            white-space: nowrap;
+        }
+
+        .status-pill::after {
+            content: "";
+            width: 18px;
+            height: 10px;
+            border: 2px solid rgba(32, 227, 210, 0.62);
+            border-left: 0;
+            border-bottom-right-radius: 14px;
+            border-top-right-radius: 12px;
+            transform-origin: left center;
+            animation: tailWag 1.9s ease-in-out infinite;
         }
 
         .status-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: #94a3b8;
+            background: #64748b;
         }
 
         .status-dot.live {
-            background: #16a34a;
-            box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.14);
+            background: #22c55e;
+            box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.8);
         }
 
         .status-dot.warn {
-            background: #d97706;
-            box-shadow: 0 0 0 6px rgba(217, 119, 6, 0.12);
+            background: var(--warning);
+            box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.14), 0 0 22px rgba(245, 158, 11, 0.72);
         }
 
-        .grid { display: grid; gap: 20px; margin-top: 20px; }
+        .grid { display: grid; gap: 18px; margin-top: 18px; }
         .stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-        .overview { grid-template-columns: 1.2fr 0.8fr; }
+        .overview { grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr); align-items: start; }
         .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
         .card {
+            position: relative;
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 22px;
+            border-radius: 14px;
             box-shadow: var(--shadow);
+            backdrop-filter: blur(16px);
+            overflow: hidden;
         }
 
-        .metric { padding: 22px; }
-        .metric-label { color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-        .metric-value { margin-top: 10px; font-size: 34px; font-weight: 800; }
-        .metric-note { margin-top: 10px; font-size: 13px; color: var(--muted); }
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 38%);
+            opacity: 0.5;
+        }
 
-        .panel-title { margin: 0; font-size: 18px; }
-        .panel-subtitle { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+        .metric {
+            min-height: 128px;
+            padding: 18px;
+            transition: transform 0.18s ease, border-color 0.18s ease;
+        }
+
+        .metric:hover {
+            transform: translateY(-2px);
+            border-color: rgba(32, 227, 210, 0.42);
+        }
+
+        .metric-label { position: relative; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+        .metric-value { position: relative; margin-top: 10px; font-size: 34px; font-weight: 900; color: #f8fdff; text-shadow: 0 0 18px rgba(32, 227, 210, 0.18); }
+        .metric-note { position: relative; margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+        .panel-title { position: relative; margin: 0; font-size: 18px; color: #f5fbff; }
+        .panel-subtitle { position: relative; margin: 6px 0 0; font-size: 13px; color: var(--muted); }
 
         .capture { padding: 22px; }
 
         .capture-layout {
+            position: relative;
             display: grid;
-            grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+            grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
             gap: 18px;
             margin-top: 18px;
         }
 
         .image-box {
-            min-height: 270px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, #ecfeff, #f8fafc);
-            border: 1px dashed #b8d4d1;
+            position: relative;
+            aspect-ratio: 4 / 3;
+            min-height: 0;
+            border-radius: 14px;
+            background:
+                linear-gradient(135deg, rgba(32, 227, 210, 0.16), rgba(139, 92, 246, 0.10)),
+                #07111b;
+            border: 1px solid var(--border-strong);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: inset 0 0 48px rgba(32, 227, 210, 0.07);
         }
 
         .image-box img {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: block;
+            filter: saturate(1.12) contrast(1.05);
         }
 
-        .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px; }
+        .image-box::before,
+        .image-box::after {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            pointer-events: none;
+            border: 1px solid rgba(32, 227, 210, 0.42);
+            z-index: 2;
+        }
+
+        .image-box::before {
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+        }
+
+        .image-box::after {
+            border-left-color: transparent;
+            border-top-color: transparent;
+        }
+
+        .scan-label {
+            position: absolute;
+            z-index: 3;
+            left: 18px;
+            top: 18px;
+            padding: 7px 10px;
+            border: 1px solid rgba(32, 227, 210, 0.46);
+            background: rgba(5, 12, 20, 0.72);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .scan-line {
+            position: absolute;
+            z-index: 3;
+            left: 0;
+            right: 0;
+            top: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.8;
+            animation: scanMove 3.6s linear infinite;
+        }
+
+        .empty { position: relative; z-index: 1; text-align: center; color: var(--muted); font-size: 14px; padding: 24px; }
 
         .details {
+            position: relative;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
+            gap: 12px;
         }
 
         .detail-card {
-            padding: 16px;
-            border-radius: 16px;
+            position: relative;
+            padding: 15px;
+            border-radius: 12px;
             background: var(--panel-muted);
-            border: 1px solid #e7eef5;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .detail-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 12px;
+            bottom: 12px;
+            width: 2px;
+            background: linear-gradient(180deg, var(--accent), transparent);
+            opacity: 0.7;
         }
 
         .detail-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-        .detail-value { margin-top: 8px; font-size: 16px; font-weight: 600; word-break: break-word; }
+        .detail-value { margin-top: 8px; font-size: 16px; font-weight: 700; word-break: break-word; color: #edfaff; }
 
         .chart-panel { padding: 20px; }
-        .chart-box { width: 100%; height: 320px; margin-top: 16px; }
+        .chart-box { position: relative; width: 100%; height: 320px; margin-top: 16px; }
 
         .table-panel { overflow: hidden; }
         .table-head {
+            position: relative;
             padding: 22px 22px 14px;
             display: flex;
             justify-content: space-between;
@@ -169,34 +391,46 @@
             gap: 16px;
         }
 
-        .table-wrap { overflow: auto; border-top: 1px solid #eef2f6; }
-        table { width: 100%; border-collapse: collapse; min-width: 1080px; }
-        th, td { padding: 14px 18px; border-bottom: 1px solid #eef2f6; text-align: left; font-size: 14px; }
+        .table-wrap {
+            position: relative;
+            overflow: auto;
+            border-top: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        table { position: relative; width: 100%; border-collapse: collapse; min-width: 1080px; }
+        th, td { padding: 14px 18px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); text-align: left; font-size: 14px; }
         th {
-            background: #f8fafc;
-            color: #486581;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: rgba(7, 13, 20, 0.96);
+            color: #86e9ff;
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.08em;
         }
-        tbody tr:hover { background: #f9fcfd; }
+        td { color: #cfe2ee; }
+        tbody tr { transition: background 0.18s ease; }
+        tbody tr:hover { background: rgba(32, 227, 210, 0.07); }
 
         .thumb {
             width: 76px;
             height: 56px;
-            border-radius: 12px;
+            border-radius: 10px;
             overflow: hidden;
-            border: 1px solid #d9e2ec;
-            background: #eef6f6;
+            border: 1px solid rgba(32, 227, 210, 0.28);
+            background: #0d1722;
         }
 
         .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
         .audio-link {
-            color: #0f766e;
-            font-weight: 700;
+            color: var(--accent);
+            font-weight: 800;
             text-decoration: none;
         }
+
+        .audio-link:hover { color: #a7fff5; }
 
         .badge {
             display: inline-flex;
@@ -204,12 +438,13 @@
             padding: 6px 10px;
             border-radius: 999px;
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 800;
+            border: 1px solid transparent;
         }
 
-        .badge.meow { color: #067647; background: #d1fadf; }
-        .badge.waiting { color: #b54708; background: #ffead5; }
-        .badge.cluster { color: #0f766e; background: #ccfbf1; }
+        .badge.meow { color: #bcfce5; background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.38); }
+        .badge.waiting { color: #fde68a; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.34); }
+        .badge.cluster { color: #d8ccff; background: rgba(139, 92, 246, 0.16); border-color: rgba(139, 92, 246, 0.36); }
         .small { font-size: 12px; color: var(--muted); }
 
         .cluster-list {
@@ -219,34 +454,65 @@
         }
 
         .cluster-row {
+            position: relative;
             display: flex;
             justify-content: space-between;
             gap: 14px;
             align-items: center;
             padding: 12px 14px;
-            border-radius: 14px;
-            border: 1px solid #d9e2ec;
-            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid rgba(32, 227, 210, 0.16);
+            background: rgba(6, 14, 22, 0.52);
+        }
+
+        .cluster-row::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 18px rgba(32, 227, 210, 0.7);
         }
 
         .cluster-main {
             display: grid;
             gap: 4px;
+            margin-right: auto;
         }
 
         .cluster-id {
-            font-weight: 800;
-            color: #102a43;
+            font-weight: 900;
+            color: #f2fbff;
+        }
+
+        @keyframes scanMove {
+            0% { transform: translateY(0); opacity: 0; }
+            12% { opacity: 0.9; }
+            82% { opacity: 0.9; }
+            100% { transform: translateY(318px); opacity: 0; }
+        }
+
+        @keyframes tailWag {
+            0%, 100% { transform: rotate(-8deg); }
+            50% { transform: rotate(12deg); }
+        }
+
+        @keyframes pawDrift {
+            0% { transform: translate3d(0, 0, 0) rotate(-24deg); }
+            100% { transform: translate3d(24px, -38px, 0) rotate(-24deg); }
         }
 
         @media (max-width: 1080px) {
-            .stats, .overview, .charts { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .overview, .charts { grid-template-columns: 1fr; }
             .capture-layout { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 720px) {
-            .shell { padding: 16px; }
+            .shell { padding: 14px; }
             .hero { padding: 18px; flex-direction: column; align-items: start; }
+            .status-pill { white-space: normal; }
+            .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .details { grid-template-columns: 1fr; }
             .metric-value { font-size: 30px; }
         }
@@ -254,13 +520,20 @@
 </head>
 <body>
 <div id="app" class="shell">
+    <div class="ambient-paws" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
     <div class="container">
         <section class="hero">
             <div class="brand">
                 <div class="brand-mark">H</div>
                 <div>
-                    <h1>Hachimitsu 猫叫检测看板</h1>
-                    <p>实时查看猫叫记录、摄像头快照、音频证据和后端状态。</p>
+                    <p class="brand-kicker">Stray Cat Monitor</p>
+                    <h1>Hachimitsu 流浪猫监测系统</h1>
+                    <p>融合摄像头抓拍、猫声识别和声纹聚类，实时追踪城市流浪猫活动。</p>
                 </div>
             </div>
             <div class="status-pill">
@@ -273,7 +546,7 @@
             <article class="card metric">
                 <div class="metric-label">近 24 小时</div>
                 <div class="metric-value">{{ stats.h24 }}</div>
-                <div class="metric-note">后端已保存的检测次数</div>
+                <div class="metric-note">已归档的流浪猫活动事件</div>
             </article>
             <article class="card metric">
                 <div class="metric-label">近 48 小时</div>
@@ -283,7 +556,7 @@
             <article class="card metric">
                 <div class="metric-label">本周</div>
                 <div class="metric-value">{{ stats.week }}</div>
-                <div class="metric-note">本周猫叫事件数量</div>
+                <div class="metric-note">本周流浪猫活动事件</div>
             </article>
             <article class="card metric">
                 <div class="metric-label">近期猫数量</div>
@@ -304,12 +577,14 @@
 
         <section class="grid overview">
             <article class="card capture">
-                <h2 class="panel-title">最新抓拍</h2>
-                <p class="panel-subtitle">最近一次猫叫事件关联上传的摄像头快照。</p>
+                <h2 class="panel-title">最新流浪猫抓拍</h2>
+                <p class="panel-subtitle">最近一次流浪猫活动关联上传的监测证据。</p>
                 <div class="capture-layout">
                     <div class="image-box">
-                        <img v-if="latestImageUrl" :src="latestImageUrl" alt="最新猫叫抓拍">
+                        <img v-if="latestImageUrl" :src="latestImageUrl" alt="最新流浪猫抓拍">
                         <div v-else class="empty">暂无上传的抓拍图片</div>
+                        <div class="scan-label">STRAY CAT DETECTED</div>
+                        <div class="scan-line" aria-hidden="true"></div>
                     </div>
                     <div class="details">
                         <div class="detail-card">
@@ -337,8 +612,8 @@
             </article>
 
             <article class="card capture">
-                <h2 class="panel-title">系统状态</h2>
-                <p class="panel-subtitle">浏览器侧汇总的后端连接、实时通道和声纹聚类状态。</p>
+                <h2 class="panel-title">监测状态</h2>
+                <p class="panel-subtitle">后端连接、实时通道和流浪猫声纹聚类状态。</p>
                 <div class="details" style="margin-top: 18px;">
                     <div class="detail-card" style="grid-column: 1 / -1;">
                         <div class="detail-label">后端接口</div>
@@ -393,12 +668,12 @@
         <section class="grid charts">
             <article class="card chart-panel">
                 <h2 class="panel-title">检测趋势</h2>
-                <p class="panel-subtitle">最近时间窗口内的猫叫检测次数变化。</p>
+                <p class="panel-subtitle">最近时间窗口内的流浪猫活动检测变化。</p>
                 <div ref="lineChartRef" class="chart-box"></div>
             </article>
             <article class="card chart-panel">
                 <h2 class="panel-title">位置统计</h2>
-                <p class="panel-subtitle">后端记录中猫叫事件出现最多的区域。</p>
+                <p class="panel-subtitle">后端记录中流浪猫活动出现最多的区域。</p>
                 <div ref="pieChartRef" class="chart-box"></div>
             </article>
         </section>
@@ -407,7 +682,7 @@
             <div class="table-head">
                 <div>
                     <h2 class="panel-title">最近日志</h2>
-                    <p class="panel-subtitle">由板端 HTTP 上传并通过 WebSocket 同步的最新检测记录。</p>
+                    <p class="panel-subtitle">由板端 HTTP 上传并通过 WebSocket 同步的最新流浪猫监测记录。</p>
                 </div>
                 <div class="small">当前显示 {{ logs.length }} 条</div>
             </div>
@@ -454,7 +729,7 @@
                         </td>
                         <td>
                             <span class="badge" :class="log.isCat ? 'meow' : 'waiting'">
-                                {{ log.isCat ? "猫叫" : "待确认" }}
+                                {{ log.isCat ? "已识别" : "待确认" }}
                             </span>
                         </td>
                     </tr>
@@ -647,28 +922,34 @@
                 lineChart.setOption({
                     animationDuration: 400,
                     grid: { left: 24, right: 18, top: 28, bottom: 24, containLabel: true },
-                    tooltip: { trigger: "axis" },
+                    backgroundColor: "transparent",
+                    tooltip: {
+                        trigger: "axis",
+                        backgroundColor: "rgba(5,12,20,0.92)",
+                        borderColor: "rgba(32,227,210,0.34)",
+                        textStyle: { color: "#e6f6ff" }
+                    },
                     xAxis: {
                         type: "category",
                         boundaryGap: false,
                         data: payload.timeLabels || [],
-                        axisLine: { lineStyle: { color: "#cbd5e1" } },
-                        axisLabel: { color: "#486581" }
+                        axisLine: { lineStyle: { color: "rgba(125,211,252,0.28)" } },
+                        axisLabel: { color: "#8aa3b7" }
                     },
                     yAxis: {
                         type: "value",
                         minInterval: 1,
                         axisLine: { show: false },
-                        splitLine: { lineStyle: { color: "#e7eef5" } },
-                        axisLabel: { color: "#486581" }
+                        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)" } },
+                        axisLabel: { color: "#8aa3b7" }
                     },
                     series: [{
                         type: "line",
                         smooth: true,
                         data: payload.counts || [],
                         symbolSize: 8,
-                        lineStyle: { width: 3, color: "#0f766e" },
-                        itemStyle: { color: "#0f766e" },
+                        lineStyle: { width: 3, color: "#20e3d2" },
+                        itemStyle: { color: "#20e3d2", borderColor: "#07111b", borderWidth: 2 },
                         areaStyle: {
                             color: {
                                 type: "linear",
@@ -677,8 +958,8 @@
                                 x2: 0,
                                 y2: 1,
                                 colorStops: [
-                                    { offset: 0, color: "rgba(15,118,110,0.28)" },
-                                    { offset: 1, color: "rgba(15,118,110,0.02)" }
+                                    { offset: 0, color: "rgba(32,227,210,0.30)" },
+                                    { offset: 1, color: "rgba(32,227,210,0.02)" }
                                 ]
                             }
                         }
@@ -695,8 +976,15 @@
                 }
                 pieChart.setOption({
                     animationDuration: 400,
-                    tooltip: { trigger: "item" },
-                    legend: { bottom: 0, textStyle: { color: "#486581" } },
+                    backgroundColor: "transparent",
+                    color: ["#20e3d2", "#38bdf8", "#8b5cf6", "#f59e0b", "#22c55e", "#fb7185"],
+                    tooltip: {
+                        trigger: "item",
+                        backgroundColor: "rgba(5,12,20,0.92)",
+                        borderColor: "rgba(32,227,210,0.34)",
+                        textStyle: { color: "#e6f6ff" }
+                    },
+                    legend: { bottom: 0, textStyle: { color: "#8aa3b7" } },
                     series: [{
                         type: "pie",
                         radius: ["45%", "72%"],
@@ -704,10 +992,10 @@
                         padAngle: 2,
                         itemStyle: {
                             borderRadius: 10,
-                            borderColor: "#ffffff",
+                            borderColor: "#07111b",
                             borderWidth: 3
                         },
-                        label: { color: "#334e68" },
+                        label: { color: "#cfe2ee" },
                         data: Array.isArray(items) ? items : []
                     }]
                 });
