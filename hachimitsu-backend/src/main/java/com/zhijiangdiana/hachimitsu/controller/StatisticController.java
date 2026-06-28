@@ -47,10 +47,16 @@ public class StatisticController {
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
 
     DateTimeFormatter yyyyMMdd_HHmmss = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MM-dd");
+    DateTimeFormatter yearMonthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final Integer DEFAULT_WINDOW_LENGTH = 8;
 
     private final Integer MAX_WINDOW_LENGTH = 24;
+    private final Integer DEFAULT_DAY_WINDOW_LENGTH = 14;
+    private final Integer MAX_DAY_WINDOW_LENGTH = 31;
+    private final Integer DEFAULT_MONTH_WINDOW_LENGTH = 6;
+    private final Integer MAX_MONTH_WINDOW_LENGTH = 12;
 
     private final ZoneId zoneId = ZoneId.of("Asia/Shanghai");
     @Autowired
@@ -60,31 +66,61 @@ public class StatisticController {
     private AudioAnalysisService audioAnalysisService;
 
     @GetMapping("/charts/line")
-    public ResponseResult getLineChart(Integer windowLength) {
-        // 鍙傛暟鏍￠獙
-        if (windowLength == null || windowLength > MAX_WINDOW_LENGTH) {
-            windowLength = DEFAULT_WINDOW_LENGTH;
+    public ResponseResult getLineChart(Integer windowLength, String granularity) {
+        ChronoUnit unit;
+        DateTimeFormatter labelFormatter;
+        ZonedDateTime start;
+        ZonedDateTime end;
+
+        granularity = granularity == null ? "hour" : granularity.trim().toLowerCase();
+        if ("day".equals(granularity)) {
+            unit = ChronoUnit.DAYS;
+            labelFormatter = monthDayFormatter;
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_DAY_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_DAY_WINDOW_LENGTH) {
+                windowLength = MAX_DAY_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().toLocalDate().plusDays(1).atStartOfDay(zoneId);
+            start = end.minusDays(1);
+        } else if ("month".equals(granularity)) {
+            unit = ChronoUnit.MONTHS;
+            labelFormatter = yearMonthFormatter;
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_MONTH_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_MONTH_WINDOW_LENGTH) {
+                windowLength = MAX_MONTH_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().withDayOfMonth(1).toLocalDate().plusMonths(1).atStartOfDay(zoneId);
+            start = end.minusMonths(1);
+        } else {
+            unit = ChronoUnit.HOURS;
+            labelFormatter = formatter;
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_WINDOW_LENGTH) {
+                windowLength = MAX_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).atZone(zoneId);
+            start = end.minusHours(1);
         }
 
-        // 鍒濆鍖栨椂闂?
-        ZonedDateTime start = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).minusHours(1).atZone(zoneId);
-        ZonedDateTime end = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).atZone(zoneId);
-
-        // 渚濇鏌ユ壘鍑哄墠windowLength澶╃殑缁熻鍊?
         List<String> timeLine = new ArrayList<>();
         List<Integer> countLine = new ArrayList<>();
         for (int i = 0; i < windowLength; i++) {
             Date startTime = Date.from(start.toInstant());
             Date endTime = Date.from(end.toInstant());
 
-            timeLine.add(end.format(formatter));
+            timeLine.add(start.format(labelFormatter));
             countLine.add((int) mongoTemplate.count(Query.query(Criteria.where("createTime").lte(endTime).gt(startTime)), Meow.class));
 
-            start = start.minusHours(1);
-            end = end.minusHours(1);
+            start = start.minus(1, unit);
+            end = end.minus(1, unit);
         }
 
-        // 灏嗘椂闂磋酱浠庡皬鍒板ぇ鎺?
         Collections.reverse(timeLine);
         Collections.reverse(countLine);
 
@@ -99,54 +135,166 @@ public class StatisticController {
     private final Integer DEFAULT_PIE_ITEM_COUNT = 4;
 
     @GetMapping("/charts/pie")
-    public ResponseResult getPieChart(Integer maxItemCount, Integer windowLength) {
-        // 鍙傛暟鏍￠獙
-        if (maxItemCount == null || maxItemCount > MAX_PIE_ITEM_COUNT) {
-            maxItemCount = DEFAULT_PIE_ITEM_COUNT;
-        }
-        // 鍙傛暟鏍￠獙
-        if (windowLength == null || windowLength > MAX_WINDOW_LENGTH) {
-            windowLength = DEFAULT_WINDOW_LENGTH;
-        }
-
-        Instant end = Instant.now();
-        Instant start = end.minus(windowLength, ChronoUnit.HOURS);
-
-        Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.match(
-                        Criteria.where("createTime").gte(start).lt(end)
-                ),
-                Aggregation.group("address").count().as("value"),
-                Aggregation.sort(Sort.Direction.DESC, "value")
-        );
-
-        AggregationResults<Document> results =
-                mongoTemplate.aggregate(aggregation, Meow.class, Document.class);
-
-        List<Document> docs = results.getMappedResults();
-
-        // 缁撴灉澶勭悊锛堝悎骞垛€滃叾浠栤€濓級
+    public ResponseResult getPieChart(Integer maxItemCount, Integer windowLength, String granularity) {
+        Date[] range;
+        List<Meow> logs;
+        Map<String, Long> locationCounts = new HashMap<>();
+        List<Map.Entry<String, Long>> sortedLocations;
         List<PieChartCountVO> voList = new ArrayList<>();
         long otherSum = 0;
 
-        for (int i = 0; i < docs.size(); i++) {
-            Document doc = docs.get(i);
-            String address = doc.getString("_id");
-            long count = doc.getInteger("value");
+        if (maxItemCount == null || maxItemCount > MAX_PIE_ITEM_COUNT) {
+            maxItemCount = DEFAULT_PIE_ITEM_COUNT;
+        }
+        if (maxItemCount < 2) {
+            maxItemCount = 2;
+        }
 
+        range = buildChartRange(windowLength, granularity);
+        logs = mongoTemplate.find(Query.query(Criteria.where("createTime").gte(range[0]).lt(range[1])), Meow.class);
+        for (Meow log : logs) {
+            String location = normalizeLocationLabel(log);
+            locationCounts.put(location, locationCounts.getOrDefault(location, 0L) + 1);
+        }
+
+        sortedLocations = new ArrayList<>(locationCounts.entrySet());
+        sortedLocations.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+
+        for (int i = 0; i < sortedLocations.size(); i++) {
+            Map.Entry<String, Long> entry = sortedLocations.get(i);
             if (i < maxItemCount - 1) {
-                voList.add(new PieChartCountVO(address, count));
+                voList.add(new PieChartCountVO(entry.getKey(), entry.getValue()));
             } else {
-                otherSum += count;
+                otherSum += entry.getValue();
             }
         }
 
         if (otherSum > 0) {
-            voList.add(new PieChartCountVO("鍏朵粬", otherSum));
+            voList.add(new PieChartCountVO("其他", otherSum));
         }
 
 
         return ResponseResult.okResult(voList);
+    }
+
+    @GetMapping("/charts/emotions")
+    public ResponseResult getEmotionChart(Integer windowLength, String granularity) {
+        Date[] range = buildChartRange(windowLength, granularity);
+        List<Meow> logs = mongoTemplate.find(Query.query(Criteria.where("createTime").gte(range[0]).lt(range[1])), Meow.class);
+        Map<String, Long> emotionCounts = new HashMap<>();
+        List<Map.Entry<String, Long>> sortedEmotions;
+        List<PieChartCountVO> voList = new ArrayList<>();
+
+        for (Meow log : logs) {
+            String emotion = normalizeEmotionLabel(log);
+            if (emotion == null) {
+                continue;
+            }
+            emotionCounts.put(emotion, emotionCounts.getOrDefault(emotion, 0L) + 1);
+        }
+
+        sortedEmotions = new ArrayList<>(emotionCounts.entrySet());
+        sortedEmotions.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+        for (Map.Entry<String, Long> entry : sortedEmotions) {
+            voList.add(new PieChartCountVO(entry.getKey(), entry.getValue()));
+        }
+
+        return ResponseResult.okResult(voList);
+    }
+
+    @GetMapping("/charts/voiceprints")
+    public ResponseResult getVoiceprintStats(Integer windowLength, String granularity) {
+        Date[] range = buildChartRange(windowLength, granularity);
+        List<Meow> logs = mongoTemplate.find(Query.query(Criteria.where("createTime").gte(range[0]).lt(range[1])), Meow.class);
+        Map<String, Integer> voiceprintSamples = new HashMap<>();
+        List<PieChartCountVO> clusters = new ArrayList<>();
+        Map<String, Object> result = new HashMap<>();
+        int sampleCount = 0;
+        int stableCount = 0;
+
+        for (Meow log : logs) {
+            String clusterId = log.getCatClusterId();
+            if (clusterId == null || clusterId.isBlank()) {
+                continue;
+            }
+            sampleCount++;
+            voiceprintSamples.put(clusterId, voiceprintSamples.getOrDefault(clusterId, 0) + 1);
+        }
+
+        for (Integer count : voiceprintSamples.values()) {
+            if (count >= 3) {
+                stableCount++;
+            }
+        }
+        voiceprintSamples.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .forEach(entry -> clusters.add(new PieChartCountVO(entry.getKey(), entry.getValue().longValue())));
+
+        result.put("clusterCount", voiceprintSamples.size());
+        result.put("sampleCount", sampleCount);
+        result.put("stableCount", stableCount);
+        result.put("clusters", clusters);
+        return ResponseResult.okResult(result);
+    }
+
+    private Date[] buildChartRange(Integer windowLength, String granularity) {
+        ZonedDateTime end;
+        ZonedDateTime start;
+
+        granularity = granularity == null ? "hour" : granularity.trim().toLowerCase();
+        if ("day".equals(granularity)) {
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_DAY_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_DAY_WINDOW_LENGTH) {
+                windowLength = MAX_DAY_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().toLocalDate().plusDays(1).atStartOfDay(zoneId);
+            start = end.minusDays(windowLength);
+        } else if ("month".equals(granularity)) {
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_MONTH_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_MONTH_WINDOW_LENGTH) {
+                windowLength = MAX_MONTH_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().withDayOfMonth(1).toLocalDate().plusMonths(1).atStartOfDay(zoneId);
+            start = end.minusMonths(windowLength);
+        } else {
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_WINDOW_LENGTH) {
+                windowLength = MAX_WINDOW_LENGTH;
+            }
+            end = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).atZone(zoneId);
+            start = end.minusHours(windowLength);
+        }
+
+        return new Date[]{Date.from(start.toInstant()), Date.from(end.toInstant())};
+    }
+
+    private String normalizeLocationLabel(Meow log) {
+        String address = log.getAddress();
+        Double latitude = log.getLatitude();
+        Double longitude = log.getLongitude();
+
+        if (address != null && !address.isBlank()) {
+            return address;
+        }
+        if (latitude != null && longitude != null) {
+            return String.format("%.3f, %.3f", latitude, longitude);
+        }
+        return "未知位置";
+    }
+
+    private String normalizeEmotionLabel(Meow log) {
+        String emotionLabel = log.getEmotionLabel();
+
+        if (emotionLabel != null && !emotionLabel.isBlank()) {
+            return emotionLabel;
+        }
+        return null;
     }
 
     @GetMapping("/number/2448week")
@@ -166,10 +314,50 @@ public class StatisticController {
 
     private final Integer DEFAULT_CNT_LOGS = 10;
     private final Integer MAX_CNT_LOGS = 50;
+    private final Integer DEFAULT_LOG_PAGE = 1;
+    private final Integer DEFAULT_LOG_PAGE_SIZE = 12;
+    private final Integer MAX_LOG_PAGE_SIZE = 100;
     private final Double CAT_THRESHOLD = 0.8;
 
     @GetMapping("/logs")
-    public ResponseResult getLogs(Integer cntLogs) {
+    public ResponseResult getLogs(Integer cntLogs, Integer page, Integer pageSize) {
+        if (page != null || pageSize != null) {
+            if (page == null || page < 1) {
+                page = DEFAULT_LOG_PAGE;
+            }
+            if (pageSize == null || pageSize < 1) {
+                pageSize = DEFAULT_LOG_PAGE_SIZE;
+            }
+            if (pageSize > MAX_LOG_PAGE_SIZE) {
+                pageSize = MAX_LOG_PAGE_SIZE;
+            }
+
+            Query countQuery = new Query();
+            long total = mongoTemplate.count(countQuery, Meow.class);
+            int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / pageSize);
+            long skip = (long) (page - 1) * pageSize;
+
+            List<Meow> logs = mongoTemplate.find(new Query()
+                    .with(Sort.by(Sort.Direction.DESC, "createTime"))
+                    .skip(skip)
+                    .limit(pageSize), Meow.class);
+
+            List<MeowLogsVO> records = new ArrayList<>();
+            for (Meow log : logs) {
+                records.add(mapMeowLog(log));
+            }
+
+            return ResponseResult.okResult(MeowLogsPageVO.builder()
+                    .records(records)
+                    .total(total)
+                    .page(page)
+                    .pageSize(pageSize)
+                    .totalPages(totalPages)
+                    .hasPrevious(page > 1 && totalPages > 0)
+                    .hasNext(totalPages > 0 && page < totalPages)
+                    .build());
+        }
+
         if (cntLogs == null || cntLogs < 0) {
             cntLogs = DEFAULT_CNT_LOGS;
         }
@@ -183,35 +371,38 @@ public class StatisticController {
 
         List<MeowLogsVO> res = new ArrayList<>();
         for (Meow log : logs) {
-            MeowLogsVO vo = MeowLogsVO.builder()
-                    .id(log.getId())
-                    .equipmentId(log.getEquipmentId())
-                    .lat(log.getLatitude())
-                    .lng(log.getLongitude())
-                    .confidence(log.getConfidence())
-                    .imageUrl(log.getImageUrl())
-                    .audioUrl(log.getAudioUrl())
-                    .audioDurationMs(log.getAudioDurationMs())
-                    .audioAnalysisStatus(log.getAudioAnalysisStatus())
-                    .catClusterId(log.getCatClusterId())
-                    .catClusterDistance(log.getCatClusterDistance())
-                    .catClusterSampleCount(log.getCatClusterSampleCount())
-                    .emotionStatus(log.getEmotionStatus())
-                    .emotionCode(log.getEmotionCode())
-                    .emotionLabel(log.getEmotionLabel())
-                    .emotionScore(log.getEmotionScore())
-                    .emotionScores(log.getEmotionScores())
-                    .emotionMessage(log.getEmotionMessage())
-                    .time(log.getCreateTime()
-                            .toInstant()
-                            .atZone(zoneId)
-                            .format(yyyyMMdd_HHmmss))
-                    .isCat(log.getConfidence() >= CAT_THRESHOLD)
-                    .build();
-            res.add(vo);
+            res.add(mapMeowLog(log));
         }
 
         return ResponseResult.okResult(res);
+    }
+
+    private MeowLogsVO mapMeowLog(Meow log) {
+        return MeowLogsVO.builder()
+                .id(log.getId())
+                .equipmentId(log.getEquipmentId())
+                .lat(log.getLatitude())
+                .lng(log.getLongitude())
+                .confidence(log.getConfidence())
+                .imageUrl(log.getImageUrl())
+                .audioUrl(log.getAudioUrl())
+                .audioDurationMs(log.getAudioDurationMs())
+                .audioAnalysisStatus(log.getAudioAnalysisStatus())
+                .catClusterId(log.getCatClusterId())
+                .catClusterDistance(log.getCatClusterDistance())
+                .catClusterSampleCount(log.getCatClusterSampleCount())
+                .emotionStatus(log.getEmotionStatus())
+                .emotionCode(log.getEmotionCode())
+                .emotionLabel(log.getEmotionLabel())
+                .emotionScore(log.getEmotionScore())
+                .emotionScores(log.getEmotionScores())
+                .emotionMessage(log.getEmotionMessage())
+                .time(log.getCreateTime() == null ? null : log.getCreateTime()
+                        .toInstant()
+                        .atZone(zoneId)
+                        .format(yyyyMMdd_HHmmss))
+                .isCat(log.getConfidence() != null && log.getConfidence() >= CAT_THRESHOLD)
+                .build();
     }
 
     @GetMapping("/cats/clusters")
