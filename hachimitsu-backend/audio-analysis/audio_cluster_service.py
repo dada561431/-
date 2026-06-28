@@ -36,8 +36,51 @@ FORCED_ASSIGN_UPDATE_THRESHOLD = float(os.environ.get(
     "0.18",
 ))
 MAX_SAMPLES = int(os.environ.get("HACHIMITSU_AUDIO_MAX_SAMPLES", "48000"))
+EMOTION_ENABLED = os.environ.get("HACHIMITSU_AUDIO_EMOTION_ENABLED", "true").lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+EMOTION_MODEL_NAME = os.environ.get("HACHIMITSU_AUDIO_EMOTION_MODEL", "laion/clap-htsat-unfused")
+EMOTION_SAMPLE_RATE = int(os.environ.get("HACHIMITSU_AUDIO_EMOTION_SAMPLE_RATE", "48000"))
+EMOTION_MAX_SECONDS = float(os.environ.get("HACHIMITSU_AUDIO_EMOTION_MAX_SECONDS", "3"))
+
+EMOTION_LABELS = [
+    {
+        "code": "hungry",
+        "label": "\u9965\u997f\u8ba8\u98df",
+        "prompt": "a cat meowing repeatedly in a hungry way asking for food",
+    },
+    {
+        "code": "relaxed",
+        "label": "\u653e\u677e\u5b89\u9759",
+        "prompt": "a relaxed cat purring softly while resting",
+    },
+    {
+        "code": "irritated",
+        "label": "\u70e6\u8e81\u4e0d\u6ee1",
+        "prompt": "a cat making short sharp meows showing irritation",
+    },
+    {
+        "code": "defensive",
+        "label": "\u9632\u5fa1\u8b66\u6212",
+        "prompt": "a cat hissing aggressively with defensive posture",
+    },
+    {
+        "code": "frightened",
+        "label": "\u6050\u60e7\u7d27\u5f20",
+        "prompt": "a frightened cat making high-pitched anxious sounds",
+    },
+]
 
 _lock = threading.Lock()
+_emotion_lock = threading.Lock()
+_emotion_model: Any | None = None
+_emotion_processor: Any | None = None
+_emotion_device: str | None = None
+_emotion_import_error: str | None = None
+_emotion_model_error: str | None = None
 
 
 def read_wav_mono(path: Path) -> tuple[list[float], int]:
@@ -62,6 +105,126 @@ def read_wav_mono(path: Path) -> tuple[list[float], int]:
         samples.append(sum(values) / len(values))
 
     return samples, sample_rate
+
+
+def resample_linear(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
+    if source_rate == target_rate or not samples:
+        return samples
+    if source_rate <= 0 or target_rate <= 0:
+        return samples
+
+    output_length = max(1, int(round(len(samples) * target_rate / source_rate)))
+    if output_length == 1:
+        return [samples[0]]
+
+    scale = (len(samples) - 1) / (output_length - 1)
+    output: list[float] = []
+    for index in range(output_length):
+        position = index * scale
+        left = int(math.floor(position))
+        right = min(len(samples) - 1, left + 1)
+        fraction = position - left
+        output.append(samples[left] * (1.0 - fraction) + samples[right] * fraction)
+    return output
+
+
+def load_emotion_model() -> tuple[Any, Any, str]:
+    global _emotion_import_error, _emotion_model, _emotion_model_error, _emotion_processor, _emotion_device
+
+    with _emotion_lock:
+        if _emotion_model is not None and _emotion_processor is not None and _emotion_device is not None:
+            return _emotion_model, _emotion_processor, _emotion_device
+        if _emotion_import_error:
+            raise RuntimeError(_emotion_import_error)
+        if _emotion_model_error:
+            raise RuntimeError(_emotion_model_error)
+
+        try:
+            import torch  # type: ignore
+            from transformers import ClapModel, ClapProcessor  # type: ignore
+        except Exception as exc:
+            _emotion_import_error = (
+                "emotion dependencies are unavailable; install torch and transformers"
+            )
+            raise RuntimeError(_emotion_import_error) from exc
+
+        try:
+            _emotion_device = "cuda" if torch.cuda.is_available() else "cpu"
+            _emotion_model = ClapModel.from_pretrained(EMOTION_MODEL_NAME)
+            _emotion_processor = ClapProcessor.from_pretrained(EMOTION_MODEL_NAME)
+            _emotion_model.to(_emotion_device)
+            _emotion_model.eval()
+            return _emotion_model, _emotion_processor, _emotion_device
+        except Exception as exc:
+            _emotion_model = None
+            _emotion_processor = None
+            _emotion_device = None
+            _emotion_model_error = f"failed to load emotion model {EMOTION_MODEL_NAME}: {exc}"
+            raise RuntimeError(_emotion_model_error) from exc
+
+
+def emotion_unavailable(status: str, message: str) -> dict[str, Any]:
+    return {
+        "emotionStatus": status,
+        "emotionMessage": message,
+        "emotionScores": [],
+    }
+
+
+def predict_emotion(samples: list[float], sample_rate: int) -> dict[str, Any]:
+    if not EMOTION_ENABLED:
+        return emotion_unavailable("disabled", "emotion analysis is disabled")
+    if not samples:
+        return emotion_unavailable("no_audio", "audio file has no samples")
+
+    try:
+        model, processor, device = load_emotion_model()
+        import torch  # type: ignore
+
+        active_samples = trim_to_active_voice(samples, sample_rate)
+        audio = resample_linear(active_samples, sample_rate, EMOTION_SAMPLE_RATE)
+        max_samples = max(1, int(EMOTION_SAMPLE_RATE * EMOTION_MAX_SECONDS))
+        if len(audio) > max_samples:
+            audio = audio[:max_samples]
+
+        inputs = processor(
+            text=[item["prompt"] for item in EMOTION_LABELS],
+            audio=audio,
+            return_tensors="pt",
+            padding=True,
+            sampling_rate=EMOTION_SAMPLE_RATE,
+        )
+        inputs = {
+            key: value.to(device) if hasattr(value, "to") else value
+            for key, value in inputs.items()
+        }
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+            probs = outputs.logits_per_audio.softmax(dim=-1).cpu().numpy()[0]
+
+        scores = [
+            {
+                "code": label["code"],
+                "label": label["label"],
+                "prompt": label["prompt"],
+                "score": float(probs[index]),
+            }
+            for index, label in enumerate(EMOTION_LABELS)
+        ]
+        scores.sort(key=lambda item: item["score"], reverse=True)
+        top = scores[0]
+        return {
+            "emotionStatus": "ok",
+            "emotionCode": top["code"],
+            "emotionLabel": top["label"],
+            "emotionScore": top["score"],
+            "emotionScores": scores,
+        }
+    except RuntimeError as exc:
+        return emotion_unavailable("unavailable", str(exc))
+    except Exception as exc:
+        return emotion_unavailable("error", str(exc))
 
 
 def frame_audio(samples: list[float], frame_size: int, hop_size: int) -> list[list[float]]:
@@ -415,6 +578,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
 
     features = extract_embedding(samples, sample_rate)
     cluster = assign_cluster(features["embedding"], equipment_id)
+    emotion = predict_emotion(samples, sample_rate)
 
     return {
         "status": "ok",
@@ -424,6 +588,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
         "clusterThreshold": CLUSTER_THRESHOLD,
         "expectedCatCount": EXPECTED_CAT_COUNT,
         **cluster,
+        **emotion,
     }
 
 
@@ -479,6 +644,9 @@ def main() -> None:
     print(f"Cluster file: {CLUSTER_FILE}")
     print(f"Cluster threshold: {CLUSTER_THRESHOLD}")
     print(f"Expected cat count: {EXPECTED_CAT_COUNT if EXPECTED_CAT_COUNT > 0 else 'unlimited'}")
+    print(f"Emotion analysis: {'enabled' if EMOTION_ENABLED else 'disabled'}")
+    if EMOTION_ENABLED:
+        print(f"Emotion model: {EMOTION_MODEL_NAME}")
     server.serve_forever()
 
 

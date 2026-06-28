@@ -16,5 +16,11 @@ public class AudioAnalysisResult {
     private Boolean forcedAssignment;
     private Double clusterThreshold;
     private Integer expectedCatCount;
+    private String emotionStatus;
+    private String emotionCode;
+    private String emotionLabel;
+    private Double emotionScore;
+    private List<AudioEmotionScore> emotionScores;
+    private String emotionMessage;
     private String message;
 }

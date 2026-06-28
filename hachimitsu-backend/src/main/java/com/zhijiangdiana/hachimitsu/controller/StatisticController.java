@@ -196,6 +196,12 @@ public class StatisticController {
                     .catClusterId(log.getCatClusterId())
                     .catClusterDistance(log.getCatClusterDistance())
                     .catClusterSampleCount(log.getCatClusterSampleCount())
+                    .emotionStatus(log.getEmotionStatus())
+                    .emotionCode(log.getEmotionCode())
+                    .emotionLabel(log.getEmotionLabel())
+                    .emotionScore(log.getEmotionScore())
+                    .emotionScores(log.getEmotionScores())
+                    .emotionMessage(log.getEmotionMessage())
                     .time(log.getCreateTime()
                             .toInstant()
                             .atZone(zoneId)
@@ -292,6 +298,12 @@ public class StatisticController {
             log.setCatClusterId(result.getClusterId());
             log.setCatClusterDistance(result.getClusterDistance());
             log.setCatClusterSampleCount(result.getClusterSampleCount());
+            log.setEmotionStatus(result.getEmotionStatus());
+            log.setEmotionCode(result.getEmotionCode());
+            log.setEmotionLabel(result.getEmotionLabel());
+            log.setEmotionScore(result.getEmotionScore());
+            log.setEmotionScores(result.getEmotionScores());
+            log.setEmotionMessage(result.getEmotionMessage());
             mongoTemplate.save(log);
 
             if (result.getClusterId() != null && !result.getClusterId().isBlank()) {

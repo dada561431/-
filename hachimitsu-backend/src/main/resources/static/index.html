@@ -445,7 +445,19 @@
         .badge.meow { color: #bcfce5; background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.38); }
         .badge.waiting { color: #fde68a; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.34); }
         .badge.cluster { color: #d8ccff; background: rgba(139, 92, 246, 0.16); border-color: rgba(139, 92, 246, 0.36); }
+        .badge.emotion { color: #ffd9e7; background: rgba(244, 114, 182, 0.16); border-color: rgba(244, 114, 182, 0.38); }
         .small { font-size: 12px; color: var(--muted); }
+
+        .emotion-stack {
+            display: inline-grid;
+            gap: 5px;
+            align-items: start;
+        }
+
+        .emotion-score {
+            font-size: 12px;
+            color: var(--muted);
+        }
 
         .cluster-list {
             display: grid;
@@ -604,6 +616,12 @@
                             <div class="detail-value">{{ latestLog ? latestLog.time : "--" }}</div>
                         </div>
                         <div class="detail-card" style="grid-column: 1 / -1;">
+                            <div class="detail-label">声音情绪</div>
+                            <div class="detail-value" :title="latestLog ? latestLog.emotionTitle : ''">
+                                {{ latestLog ? latestLog.emotionText : "--" }}
+                            </div>
+                        </div>
+                        <div class="detail-card" style="grid-column: 1 / -1;">
                             <div class="detail-label">最近刷新</div>
                             <div class="detail-value">{{ lastRefreshText }}</div>
                         </div>
@@ -698,12 +716,13 @@
                         <th>抓拍</th>
                         <th>音频</th>
                         <th>猫声纹</th>
+                        <th>情绪</th>
                         <th>状态</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr v-if="!logs.length">
-                        <td colspan="9" class="small">暂无记录</td>
+                        <td colspan="10" class="small">暂无记录</td>
                     </tr>
                     <tr v-for="log in logs" :key="log.id">
                         <td>{{ log.id || "--" }}</td>
@@ -726,6 +745,13 @@
                         <td>
                             <span v-if="log.catClusterId" class="badge cluster">{{ log.catClusterId }}</span>
                             <span v-else class="small">{{ formatAnalysisStatus(log.audioAnalysisStatus) }}</span>
+                        </td>
+                        <td>
+                            <span v-if="log.emotionLabel" class="emotion-stack" :title="log.emotionTitle">
+                                <span class="badge emotion">{{ log.emotionLabel }}</span>
+                                <span class="emotion-score">{{ formatPercent(log.emotionScore) }}</span>
+                            </span>
+                            <span v-else class="small">{{ formatEmotionStatus(log.emotionStatus) }}</span>
                         </td>
                         <td>
                             <span class="badge" :class="log.isCat ? 'meow' : 'waiting'">
@@ -857,6 +883,14 @@
                 return num.toFixed(digits);
             };
 
+            const formatPercent = (value) => {
+                const num = Number(value);
+                if (!Number.isFinite(num)) {
+                    return "--";
+                }
+                return `${(num * 100).toFixed(1)}%`;
+            };
+
             const formatAnalysisStatus = (status) => {
                 const normalized = String(status || "").trim().toLowerCase();
                 if (!normalized) {
@@ -879,11 +913,43 @@
                 return status;
             };
 
+            const formatEmotionStatus = (status) => {
+                const normalized = String(status || "").trim().toLowerCase();
+                if (!normalized) {
+                    return "未分析";
+                }
+                const labels = {
+                    ok: "已分析",
+                    disabled: "未启用",
+                    no_audio: "无音频",
+                    unavailable: "情绪模型不可用",
+                    error: "情绪分析失败"
+                };
+                return labels[normalized] || status;
+            };
+
+            const buildEmotionTitle = (scores, message) => {
+                const lines = Array.isArray(scores)
+                    ? scores
+                        .filter((item) => item && item.label)
+                        .map((item) => `${item.label}: ${formatPercent(item.score)}`)
+                    : [];
+                if (message) {
+                    lines.push(message);
+                }
+                return lines.join("\n");
+            };
+
             const mapLog = (raw) => {
                 const lat = raw.lat ?? raw.latitude;
                 const lng = raw.lng ?? raw.longitude;
                 const time = raw.time ?? raw.createTime;
                 const confidence = Number(raw.confidence ?? 0);
+                const emotionScores = Array.isArray(raw.emotionScores) ? raw.emotionScores : [];
+                const emotionScore = Number.isFinite(Number(raw.emotionScore)) ? Number(raw.emotionScore) : null;
+                const emotionLabel = raw.emotionLabel || "";
+                const emotionStatus = raw.emotionStatus || "";
+                const emotionMessage = raw.emotionMessage || "";
 
                 return {
                     id: raw.id || "",
@@ -902,6 +968,16 @@
                     catClusterId: raw.catClusterId || "",
                     catClusterDistance: Number.isFinite(Number(raw.catClusterDistance)) ? Number(raw.catClusterDistance) : null,
                     catClusterSampleCount: Number.isFinite(Number(raw.catClusterSampleCount)) ? Number(raw.catClusterSampleCount) : null,
+                    emotionStatus,
+                    emotionCode: raw.emotionCode || "",
+                    emotionLabel,
+                    emotionScore,
+                    emotionScores,
+                    emotionMessage,
+                    emotionText: emotionLabel
+                        ? `${emotionLabel} · ${formatPercent(emotionScore)}`
+                        : formatEmotionStatus(emotionStatus),
+                    emotionTitle: buildEmotionTitle(emotionScores, emotionMessage),
                     time: formatDate(time),
                     isCat: raw.isCat !== undefined ? !!raw.isCat : confidence >= 0.8
                 };
@@ -1154,7 +1230,9 @@
                 clusterSummary,
                 historyClusterSummary,
                 formatAnalysisStatus,
+                formatEmotionStatus,
                 formatNullable,
+                formatPercent,
                 lineChartRef,
                 pieChartRef
             };

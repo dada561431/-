@@ -34,5 +34,11 @@ public class Meow {
     private String catClusterId;
     private Double catClusterDistance;
     private Integer catClusterSampleCount;
+    private String emotionStatus;
+    private String emotionCode;
+    private String emotionLabel;
+    private Double emotionScore;
+    private List<AudioEmotionScore> emotionScores;
+    private String emotionMessage;
     private Date createTime;
 }

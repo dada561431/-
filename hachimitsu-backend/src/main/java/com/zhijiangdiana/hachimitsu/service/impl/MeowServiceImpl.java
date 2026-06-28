@@ -310,6 +310,12 @@ public class MeowServiceImpl implements MeowService {
             meow.setCatClusterId(analysisResult.getClusterId());
             meow.setCatClusterDistance(analysisResult.getClusterDistance());
             meow.setCatClusterSampleCount(analysisResult.getClusterSampleCount());
+            meow.setEmotionStatus(analysisResult.getEmotionStatus());
+            meow.setEmotionCode(analysisResult.getEmotionCode());
+            meow.setEmotionLabel(analysisResult.getEmotionLabel());
+            meow.setEmotionScore(analysisResult.getEmotionScore());
+            meow.setEmotionScores(analysisResult.getEmotionScores());
+            meow.setEmotionMessage(analysisResult.getEmotionMessage());
         }
 
         mongoTemplate.save(meow);
