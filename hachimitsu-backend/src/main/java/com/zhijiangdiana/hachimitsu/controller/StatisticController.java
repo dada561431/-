@@ -1,6 +1,7 @@
 package com.zhijiangdiana.hachimitsu.controller;
 
 import com.mongodb.client.MongoClient;
+import com.mongodb.client.result.UpdateResult;
 import com.zhijiangdiana.hachimitsu.pojo.*;
 import com.zhijiangdiana.hachimitsu.service.AudioAnalysisService;
 import org.bson.Document;
@@ -11,6 +12,7 @@ import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +52,8 @@ public class StatisticController {
     DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MM-dd");
     DateTimeFormatter yearMonthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
 
+    private final Integer DEFAULT_TEN_MINUTE_WINDOW_LENGTH = 6;
+    private final Integer MAX_TEN_MINUTE_WINDOW_LENGTH = 36;
     private final Integer DEFAULT_WINDOW_LENGTH = 8;
 
     private final Integer MAX_WINDOW_LENGTH = 24;
@@ -73,7 +77,18 @@ public class StatisticController {
         ZonedDateTime end;
 
         granularity = granularity == null ? "hour" : granularity.trim().toLowerCase();
-        if ("day".equals(granularity)) {
+        if ("ten-minute".equals(granularity)) {
+            unit = ChronoUnit.MINUTES;
+            labelFormatter = formatter;
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_TEN_MINUTE_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_TEN_MINUTE_WINDOW_LENGTH) {
+                windowLength = MAX_TEN_MINUTE_WINDOW_LENGTH;
+            }
+            end = floorToTenMinutes(LocalDateTime.now()).atZone(zoneId);
+            start = end.minusMinutes(10);
+        } else if ("day".equals(granularity)) {
             unit = ChronoUnit.DAYS;
             labelFormatter = monthDayFormatter;
             if (windowLength == null || windowLength < 1) {
@@ -117,8 +132,13 @@ public class StatisticController {
             timeLine.add(start.format(labelFormatter));
             countLine.add((int) mongoTemplate.count(Query.query(Criteria.where("createTime").lte(endTime).gt(startTime)), Meow.class));
 
-            start = start.minus(1, unit);
-            end = end.minus(1, unit);
+            if ("ten-minute".equals(granularity)) {
+                start = start.minusMinutes(10);
+                end = end.minusMinutes(10);
+            } else {
+                start = start.minus(1, unit);
+                end = end.minus(1, unit);
+            }
         }
 
         Collections.reverse(timeLine);
@@ -129,6 +149,10 @@ public class StatisticController {
         lineChartVO.setCounts(countLine);
 
         return ResponseResult.okResult(lineChartVO);
+    }
+
+    private LocalDateTime floorToTenMinutes(LocalDateTime time) {
+        return time.withMinute((time.getMinute() / 10) * 10).withSecond(0).withNano(0);
     }
 
     private final Integer MAX_PIE_ITEM_COUNT = 8;
@@ -242,7 +266,16 @@ public class StatisticController {
         ZonedDateTime start;
 
         granularity = granularity == null ? "hour" : granularity.trim().toLowerCase();
-        if ("day".equals(granularity)) {
+        if ("ten-minute".equals(granularity)) {
+            if (windowLength == null || windowLength < 1) {
+                windowLength = DEFAULT_TEN_MINUTE_WINDOW_LENGTH;
+            }
+            if (windowLength > MAX_TEN_MINUTE_WINDOW_LENGTH) {
+                windowLength = MAX_TEN_MINUTE_WINDOW_LENGTH;
+            }
+            end = floorToTenMinutes(LocalDateTime.now()).atZone(zoneId);
+            start = end.minusMinutes((long) windowLength * 10);
+        } else if ("day".equals(granularity)) {
             if (windowLength == null || windowLength < 1) {
                 windowLength = DEFAULT_DAY_WINDOW_LENGTH;
             }
@@ -508,6 +541,30 @@ public class StatisticController {
                 .failed(failed)
                 .clustered(clustered)
                 .build());
+    }
+
+    @PostMapping("/cats/clear-clusters")
+    public ResponseResult clearCatClusters() {
+        UpdateResult updateResult;
+        Update update;
+        Map<String, Object> result = new HashMap<>();
+
+        if (!audioAnalysisService.resetClusters()) {
+            return ResponseResult.errorResult(500, "audio analysis reset failed");
+        }
+
+        update = new Update()
+                .unset("audioEmbedding")
+                .unset("audioEnergy")
+                .unset("audioZeroCrossingRate")
+                .unset("catClusterId")
+                .unset("catClusterDistance")
+                .unset("catClusterSampleCount");
+        updateResult = mongoTemplate.updateMulti(new Query(), update, Meow.class);
+
+        result.put("matchedCount", updateResult.getMatchedCount());
+        result.put("modifiedCount", updateResult.getModifiedCount());
+        return ResponseResult.okResult(result);
     }
 
     private static class ClusterAccumulator {

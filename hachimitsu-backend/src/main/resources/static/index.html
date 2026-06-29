@@ -587,6 +587,30 @@
             opacity: 0.45;
         }
 
+        .danger-button {
+            min-height: 34px;
+            border: 1px solid rgba(251, 113, 133, 0.42);
+            border-radius: 8px;
+            color: #ffe4e9;
+            background: rgba(251, 113, 133, 0.13);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 900;
+            padding: 0 12px;
+            cursor: pointer;
+            transition: border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+        }
+
+        .danger-button:hover:not(:disabled) {
+            border-color: rgba(251, 113, 133, 0.72);
+            background: rgba(251, 113, 133, 0.22);
+        }
+
+        .danger-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
         table { position: relative; width: 100%; border-collapse: collapse; min-width: 820px; }
         th, td { padding: 14px 18px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); text-align: left; font-size: 14px; }
         th {
@@ -866,6 +890,15 @@
                         <div class="detail-value">{{ latestMessage }}</div>
                     </div>
                     <div class="detail-card" style="grid-column: 1 / -1;">
+                        <div class="detail-label">声纹聚类操作</div>
+                        <div class="detail-value">
+                            <button class="danger-button" type="button" :disabled="clearingClusters" @click="clearCatClusters">
+                                {{ clearingClusters ? "清除中..." : "清除历史声纹聚类" }}
+                            </button>
+                        </div>
+                        <div class="small" style="margin-top: 10px;">仅清除声纹簇、特征向量和聚类距离，不删除音频、图片、情绪或日志。</div>
+                    </div>
+                    <div class="detail-card" style="grid-column: 1 / -1;">
                         <div class="detail-label">近期猫声纹簇</div>
                         <div class="detail-value">{{ clusterSummary }}</div>
                         <div class="cluster-list" v-if="catClusters.length">
@@ -1064,11 +1097,17 @@
             const emotionChartRef = ref(null);
             const voiceprintChartRef = ref(null);
             const chartGranularityOptions = [
+                { value: "ten-minute", label: "10 分钟" },
                 { value: "hour", label: "小时" },
                 { value: "day", label: "天" },
                 { value: "month", label: "月" }
             ];
             const chartWindowOptions = {
+                "ten-minute": [
+                    { value: 6, label: "1 小时" },
+                    { value: 18, label: "3 小时" },
+                    { value: 36, label: "6 小时" }
+                ],
                 hour: [
                     { value: 8, label: "8 小时" },
                     { value: 12, label: "12 小时" },
@@ -1106,6 +1145,7 @@
             const websocketState = ref("未连接");
             const latestMessage = ref("暂无实时消息");
             const lastRefreshAt = ref(null);
+            const clearingClusters = ref(false);
 
             let lineChart = null;
             let barChart = null;
@@ -1715,6 +1755,39 @@
                 historyCatClusters.value = Array.isArray(payload) ? payload : [];
             };
 
+            const clearCatClusters = async () => {
+                if (clearingClusters.value) {
+                    return;
+                }
+                const confirmed = window.confirm("确认清除历史声纹聚类数据？音频、图片、情绪和日志会保留。");
+                if (!confirmed) {
+                    return;
+                }
+
+                clearingClusters.value = true;
+                latestMessage.value = "正在清除历史声纹聚类数据";
+                try {
+                    const response = await axios.post("/api/cats/clear-clusters");
+                    const payload = response.data?.data || {};
+                    catClusters.value = [];
+                    historyCatClusters.value = [];
+                    voiceprintStats.value = { clusterCount: 0, sampleCount: 0, stableCount: 0, clusters: [] };
+                    renderVoiceprintChart([]);
+                    await Promise.all([
+                        fetchLogs(),
+                        fetchCatClusters(),
+                        fetchHistoryCatClusters(),
+                        fetchVoiceprintStats()
+                    ]);
+                    latestMessage.value = `声纹聚类已清除，更新 ${payload.modifiedCount ?? 0} 条记录`;
+                    lastRefreshAt.value = new Date();
+                } catch (error) {
+                    latestMessage.value = `清除声纹聚类失败：${error.response?.data?.errorMessage || error.message}`;
+                } finally {
+                    clearingClusters.value = false;
+                }
+            };
+
             const refreshAll = async () => {
                 try {
                     await Promise.all([
@@ -1879,6 +1952,7 @@
                 logDisplayTotalPages,
                 catClusters,
                 historyCatClusters,
+                clearingClusters,
                 status,
                 backendState,
                 websocketState,
@@ -1896,6 +1970,7 @@
                 setChartWindow,
                 changeLogPage,
                 changeLogPageSize,
+                clearCatClusters,
                 formatAnalysisStatus,
                 formatEmotionStatus,
                 formatNullable,

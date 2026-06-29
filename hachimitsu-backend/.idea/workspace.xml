@@ -5,9 +5,53 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d6d386fe-8ed2-4454-9b39-a3592e9f7ccb" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/.mtb-prefs.json" beforeDir="false" afterPath="$PROJECT_DIR$/../PSOC_Edge_Hachimitsu_Detector/.mtb-prefs.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/audio-analysis/audio_clusters.json" beforeDir="false" afterPath="$PROJECT_DIR$/audio-analysis/audio_clusters.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/controller/StatisticController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/zhijiangdiana/hachimitsu/controller/StatisticController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/static/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/static/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/banner.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/HachimitsuApplication.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/configuration/WebMvcConfiguration.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/configuration/WebSocketConfig.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/controller/MeowController.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/controller/RTCController.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/controller/StatisticController.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/filter/BufferedResponseWrapper$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/filter/BufferedResponseWrapper.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/filter/ContentLengthFilter.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/handler/GlobalExceptionHandler.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/interceptor/CloseConnectionInterceptor.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddMeowDto.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto$AddressDtoBuilder.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AddressDto.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AppHttpCodeEnum.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/AttachMeowImageDto.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/LineChartVO.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/Meow.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO$MeowLogsVOBuilder.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/MeowLogsVO.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/NumberVO.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/PieChartCountVO.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/pojo/ResponseResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/AddressService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService$2.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/CacheService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/ImageStorageService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/MeowService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/ImageStorageServiceImpl.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/service/impl/MeowServiceImpl.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/zhijiangdiana/hachimitsu/utils/JsonUtils.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/server.pfx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/static/index.clean.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/static/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/test-classes/com/zhijiangdiana/hachimitsu/HachimitsuApplicationTests.class" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,7 +93,7 @@
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;Spring Boot.HachimitsuApplication.executor&quot;: &quot;Run&quot;,
     &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;前端优化2&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;E:/project/qianrushi/-/hachimitsu-backend&quot;,
@@ -76,8 +120,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.24374.151" />
-        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.24374.151" />
+        <option value="bundled-jdk-9823dce3aa75-fbdcb00ec9e3-intellij.indexing.shared.core-IU-251.26094.121" />
+        <option value="bundled-js-predefined-d6986cc7102b-b26f3e71634d-JavaScript-IU-251.26094.121" />
       </set>
     </attachedChunks>
   </component>
@@ -102,6 +146,7 @@
       <workItem from="1778920526203" duration="9000" />
       <workItem from="1779156518025" duration="1860000" />
       <workItem from="1779193566080" duration="145000" />
+      <workItem from="1782701898204" duration="2829000" />
     </task>
     <servers />
   </component>
